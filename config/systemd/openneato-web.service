@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenNeato Web Interface
+After=openneato-core.service
+
+[Service]
+User=root
+WorkingDirectory=/opt/openneato/web_interface/backend
+# Source necessario per rclpy
+ExecStart=/bin/bash -c 'source /opt/ros/jazzy/setup.bash && source /opt/openneato/firmware/ros2_ws/install/setup.bash && exec /opt/openneato/venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 80'
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

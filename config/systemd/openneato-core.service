@@ -1,0 +1,13 @@
+[Unit]
+Description=OpenNeato Core ROS 2
+After=network.target
+
+[Service]
+User=root
+# Utilizziamo bash -c per fare il source dell'ambiente ROS 2 e del workspace locale prima del lancio
+ExecStart=/bin/bash -c 'source /opt/ros/jazzy/setup.bash && source /opt/openneato/firmware/ros2_ws/install/setup.bash && exec /opt/openneato/venv/bin/ros2 launch openneato_nav navigation_launch.py'
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

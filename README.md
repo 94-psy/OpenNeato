@@ -1,69 +1,75 @@
 # OpenNeato
 
-![License](https://img.shields.io/badge/License-GPLv3-blue.svg)
-![ROS 2 Version](https://img.shields.io/badge/ROS_2-Jazzy_Jalisco-green.svg)
-![Platform](https://img.shields.io/badge/Platform-Radxa_Zero_3W-orange.svg)
-![Status](https://img.shields.io/badge/Status-Alpha-red.svg)
+![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
+![ROS 2 Jazzy](https://img.shields.io/badge/ROS_2-Jazzy-22314E.svg)
+![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)
 
-**OpenNeato** è un progetto open source dedicato a rivitalizzare il robot aspirapolvere **Neato D7 Botvac** sostituendo la logica proprietaria obsoleta con hardware moderno e software libero.
+**OpenNeato** is an open-source project designed to breathe new life into Neato robotic vacuums (specifically tested on the Neato D7) by replacing the proprietary logic board functions with a modern Single Board Computer (SBC) running **ROS 2 Jazzy**.
 
-L'obiettivo è trasformare il Neato D7 in una piattaforma robotica di ricerca e domotica completamente controllabile, sfruttando la potenza di **ROS 2 Jazzy** su un **Radxa Zero 3W**.
+This project transforms your old vacuum into a smart, fully autonomous robot capable of advanced mapping, navigation, and web-based control, leveraging the power of the `nav2` stack and a custom Python-based driver.
 
----
+## Hardware Requirements
 
-## ⚠️ Avvertenze di Sicurezza (Safety Disclaimer)
+To build your own OpenNeato, you will need:
 
-**LEGGERE ATTENTAMENTE PRIMA DI PROCEDERE**
+*   **Robot:** Neato XV, Botvac, or D-Series (e.g., Neato D7 Connected).
+*   **SBC:** Radxa Zero 3W (recommended) or Raspberry Pi Zero 2 W.
+*   **Power:** Buck Converter (Step-down) to convert the robot's battery voltage (approx. 14V-16V) to 5V for the SBC.
+*   **Storage:** High-endurance MicroSD Card (16GB+).
+*   **Connectivity:** UART connection wires (TX/RX/GND) to interface the SBC with the Neato motherboard.
 
-1.  **Rischio Elettrico e Incendio:** Questo progetto richiede la modifica dell'hardware interno del robot. Il Neato D7 utilizza batterie agli ioni di litio (Li-Ion) ad alta capacità. Un cablaggio errato, cortocircuiti o una gestione impropria della batteria possono causare incendi, esplosioni o lesioni gravi.
-2.  **Invalidamento Garanzia:** L'apertura del dispositivo e qualsiasi modifica hardware o firmware invalidano immediatamente qualsiasi garanzia residua del produttore.
-3.  **Nessuna Responsabilità:** Il software e le istruzioni sono forniti "COSÌ COME SONO", senza alcuna garanzia. Gli autori e i contributori di OpenNeato non sono responsabili per danni al dispositivo, alla proprietà o alle persone derivanti dall'uso di questo progetto. Procedi a tuo rischio e pericolo.
+## Installation
 
----
+The installation process has been fully automated to ensure a smooth setup on Ubuntu 24.04.
 
-## 🛒 Bill of Materials (Hardware Richiesto)
-
-Per completare la conversione sono necessari i seguenti componenti:
-
-*   **Computer di Bordo:** Radxa Zero 3W (o equivalente ARM64 compatibile con Ubuntu 24.04).
-*   **Robot:** Neato D7 Botvac (funzionante meccanicamente).
-*   **Alimentazione:** Convertitore DC-DC Buck (per abbassare la tensione della batteria del Neato a 5V per il Radxa).
-*   **Connettività:** Cavi UART/USB per interfacciare il Radxa alla porta seriale della scheda madre del Neato (o direttamente al LiDAR/motori se si bypassa la PCB originale).
-*   **MicroSD:** Classe 10, min 32GB per l'OS.
-
----
-
-## 🚀 Installation
-
-L'installazione è automatizzata tramite script per configurare l'ambiente su Ubuntu 24.04.
-
-1.  Clona il repository sul tuo Radxa Zero 3W:
+1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/tuo-username/OpenNeato.git
+    git clone https://github.com/94-psy/OpenNeato.git
     cd OpenNeato
     ```
 
-2.  Esegui lo script di installazione:
+2.  **Run the Installer:**
     ```bash
-    cd installer
-    sudo ./install.sh
+    chmod +x installer/install.sh
+    sudo ./installer/install.sh
     ```
 
-Lo script si occuperà di:
-*   Installare le dipendenze di sistema.
-*   Configurare l'ambiente ROS 2 Jazzy.
-*   Installare le dipendenze Python per la Web Interface.
-*   Configurare i servizi systemd per l'avvio automatico.
+3.  **Follow the Interactive Menu:**
+    The script uses a `whiptail` interface. Select **"Install / Update"** to begin.
+    The installer will automatically:
+    *   Install system dependencies (ROS 2, Python venv, etc.).
+    *   Set up permissions (dialout group).
+    *   Deploy the firmware and web interface to `/opt/openneato`.
+    *   Build the ROS 2 workspace.
+    *   Configure and start `systemd` services.
 
----
+Once finished, the installer will display the IP address of your robot and the URL for the Web Dashboard.
 
-## 📄 License
+## How to Update (Deploy Pigro)
 
-Questo progetto è rilasciato sotto la licenza **GNU General Public License v3.0 (GPLv3)**.
+When new features or bug fixes are released, updating your robot is simple. The installation script is idempotent and handles updates automatically.
 
-Ciò significa che:
-*   ✅ Puoi usare, copiare e modificare il software liberamente.
-*   ✅ Se distribuisci versioni modificate, **DEVI** rilasciare il codice sorgente sotto la stessa licenza (GPLv3).
-*   🚫 Non puoi chiudere il codice sorgente o utilizzarlo in prodotti commerciali proprietari senza rilasciare le modifiche.
+```bash
+cd OpenNeato
+git pull
+sudo ./installer/install.sh
+```
 
-Vedi il file [LICENSE](LICENSE) per il testo completo.
+Select **"Install / Update"** again. The script will detect the changes, rebuild the firmware if necessary, and restart the services.
+
+## Architecture
+
+OpenNeato is built on a modular architecture:
+
+*   **OpenNeato Core (ROS 2):**
+    *   **Driver Node:** Interfaces with the Neato hardware via serial (Lidar, Motors, Sensors).
+    *   **Nav2 Stack:** Handles mapping (SLAM), path planning, and autonomous navigation.
+    *   **Docking Server:** Custom Action Server for precise docking and charging logic.
+    *   **Mission Control:** Manages cleaning queues, state persistence, and battery watchdogs.
+*   **Web Interface:**
+    *   **Backend:** FastAPI (Python) server that bridges the web UI with ROS 2.
+    *   **Frontend:** Responsive HTML/JS dashboard for control and status monitoring.
+
+## Disclaimer
+
+**Use at your own risk.** Modifying your robot's hardware or firmware will void the manufacturer's warranty. This software is provided "as is", without warranty of any kind. The authors are not responsible for any damage to your hardware, data loss, or fires caused by improper handling of Li-Ion batteries or electrical components. Always ensure proper insulation and power regulation when modifying electronics.
