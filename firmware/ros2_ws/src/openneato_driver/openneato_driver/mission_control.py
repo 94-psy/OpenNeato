@@ -17,9 +17,29 @@ except ImportError:
     class DockToBase:
         class Goal: pass
 
+# Task 2: Importazione del Coverage Planner
+from openneato_driver.coverage_planner import ZoneCoveragePlanner
+
+
 class MissionControl(Node):
     def __init__(self):
         super().__init__('mission_control')
+
+        self.subscription = self.create_subscription(
+            String,
+            'mission/start',
+            self.mission_start_callback,
+            10)
+            
+        # Task 2: Istanziazione del planner con stride di 0.25m
+        self.coverage_planner = ZoneCoveragePlanner(stride=0.25)
+        
+        # Placeholder per il database delle zone (in produzione verrebbe caricato da file/param)
+        self.zones = {
+            # Esempio struttura: 'soggiorno': [(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]
+        }
+        self.get_logger().info("Mission Control initialized with ZoneCoveragePlanner")
+
         
         self.navigator = BasicNavigator()
         self.docking_client = ActionClient(self, DockToBase, 'dock_to_base')
@@ -52,6 +72,31 @@ class MissionControl(Node):
         self.battery_level = msg.percentage if msg.percentage > 1.0 else msg.percentage * 100.0
 
     def mission_start_callback(self, msg):
+        self.get_logger().info(f"Received mission request: {msg.data}")
+        try:
+            zone_ids = json.loads(msg.data)
+            waypoints = []
+            
+            for zone_id in zone_ids:
+                # Recupera i waypoint per la zona specifica
+                zone_waypoints = self.load_zone_coordinates(zone_id)
+                
+                # Task 2: Usa extend per aggiungere la lista di PoseStamped alla lista principale
+                if zone_waypoints:
+                    waypoints.extend(zone_waypoints)
+                    self.get_logger().info(f"Added {len(zone_waypoints)} waypoints for zone {zone_id}")
+            
+            if waypoints:
+                self.get_logger().info(f"Starting mission execution with {len(waypoints)} total waypoints")
+                self.execute_mission(waypoints)
+            else:
+                self.get_logger().warn("Mission request resulted in no valid waypoints")
+                
+        except json.JSONDecodeError:
+            self.get_logger().error("Failed to decode JSON mission request")
+        except Exception as e:
+            self.get_logger().error(f"Error processing mission: {e}")
+
         """Riceve una lista JSON di ID zona e avvia la missione."""
         try:
             zone_ids = json.loads(msg.data)
@@ -76,6 +121,7 @@ class MissionControl(Node):
             self.get_logger().error("Errore decodifica JSON richiesta missione.")
 
     def load_zone_coordinates(self, zone_id):
+        
         """Legge il config e calcola il baricentro della zona."""
         if not os.path.exists(self.ZONES_CONFIG_FILE):
             self.get_logger().error("File configurazione zone non trovato.")
@@ -106,6 +152,7 @@ class MissionControl(Node):
             self.get_logger().error(f"Errore lettura zone: {e}")
         return None
 
+    
     def save_state(self):
         if not self.is_mission_active:
             return
