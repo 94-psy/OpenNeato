@@ -5,8 +5,9 @@ import os
 import time
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
-from std_msgs.msg import String
+from std_msgs.msg import String, Bool
 from sensor_msgs.msg import BatteryState
+from diagnostic_msgs.msg import DiagnosticStatus
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 from rclpy.action import ActionClient
 from openneato_driver.coverage_planner import ZoneCoveragePlanner
@@ -27,6 +28,11 @@ class MissionControl(Node):
             'mission/start',
             self.mission_start_callback,
             10)
+        
+        # Task 1 & 2: Publishers per controllo pulizia e stato
+        self.cleaning_pub = self.create_publisher(Bool, 'cleaning/active', 10)
+        self.status_pub = self.create_publisher(String, 'mission/status', 10)
+        self.hazard_sub = self.create_subscription(DiagnosticStatus, '/hazard_status', self.hazard_callback, 10)
             
         # Task 2: Istanziazione del planner con stride di 0.25m
         self.coverage_planner = ZoneCoveragePlanner(stride=0.25)
@@ -71,6 +77,16 @@ class MissionControl(Node):
         # Normalizza percentuale 0-100
         self.battery_level = msg.percentage if msg.percentage > 1.0 else msg.percentage * 100.0
 
+    def hazard_callback(self, msg):
+        """Task 3: Safety Stop immediato in caso di pericolo."""
+        if msg.level == DiagnosticStatus.ERROR:
+            self.get_logger().error(f"HAZARD DETECTED: {msg.message}")
+            self.cleaning_pub.publish(Bool(data=False))
+            self.status_pub.publish(String(data="ERROR"))
+            if self.is_mission_active:
+                self.navigator.cancelTask()
+                self.is_mission_active = False
+
     def mission_start_callback(self, msg):
         self.get_logger().info(f"Received mission request: {msg.data}")
         try:
@@ -90,6 +106,11 @@ class MissionControl(Node):
                 self.current_waypoints = waypoints
                 self.current_waypoint_index = 0
                 self.is_mission_active = True
+                
+                # Attiva pulizia e aggiorna stato
+                self.cleaning_pub.publish(Bool(data=True))
+                self.status_pub.publish(String(data="CLEANING"))
+                
                 self.get_logger().info(f"Starting mission execution with {len(waypoints)} total waypoints")
                 self.navigator.followWaypoints(self.current_waypoints)
             else:
@@ -202,6 +223,11 @@ class MissionControl(Node):
                 result = self.navigator.getResult()
                 if result == TaskResult.SUCCEEDED:
                     self.get_logger().info("Missione completata!")
+                    
+                    # Ferma pulizia e aggiorna stato
+                    self.cleaning_pub.publish(Bool(data=False))
+                    self.status_pub.publish(String(data="IDLE"))
+                    
                     # Pulisci file stato
                     if os.path.exists(self.state_file):
                         os.remove(self.state_file)
@@ -209,6 +235,10 @@ class MissionControl(Node):
 
     def abort_and_dock(self):
         self.navigator.cancelTask()
+        
+        self.cleaning_pub.publish(Bool(data=False))
+        self.status_pub.publish(String(data="DOCKING"))
+        
         self.save_state() # Salva ultimo stato noto
         self.is_mission_active = False
         

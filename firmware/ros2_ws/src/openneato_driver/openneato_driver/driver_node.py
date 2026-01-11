@@ -10,7 +10,7 @@ import math
 import struct
 
 from std_msgs.msg import Header
-from std_msgs.msg import String, Int32
+from std_msgs.msg import String, Int32, Bool
 from sensor_msgs.msg import BatteryState, LaserScan, PointCloud2, PointField
 from geometry_msgs.msg import Twist
 from diagnostic_msgs.msg import DiagnosticStatus, KeyValue
@@ -61,6 +61,12 @@ class NeatoDriver(Node):
             Int32,
             '/play_sound',
             self.play_sound_callback,
+            10
+        )
+        self.cleaning_sub = self.create_subscription(
+            Bool,
+            'cleaning/active',
+            self.cleaning_callback,
             10
         )
 
@@ -425,6 +431,23 @@ class NeatoDriver(Node):
         # ID 0: Startup, 1: Start Cleaning, 2: Stop Cleaning, 3: Error
         self.send_command(f"PlaySound SoundID {msg.data}")
 
+    def cleaning_callback(self, msg):
+        """Attiva o disattiva i motori di pulizia (Vacuum, Main Brush, Side Brush)."""
+        if not self.connected:
+            return
+
+        if msg.data:
+            # Attivazione sequenziale motori
+            self.send_command("SetMotor VacuumOn")
+            self.send_command("SetMotor BrushOn")
+            self.send_command("SetMotor SideBrushOn")
+            self.get_logger().info("Cleaning Motors ENABLED")
+        else:
+            self.send_command("SetMotor VacuumOff")
+            self.send_command("SetMotor BrushOff")
+            self.send_command("SetMotor SideBrushOff")
+            self.get_logger().info("Cleaning Motors DISABLED")
+
 def main(args=None):
     rclpy.init(args=args)
     node = NeatoDriver()
@@ -437,6 +460,9 @@ def main(args=None):
         # Stop motori e laser alla chiusura
         if node.ser and node.ser.is_open:
             node.ser.write(b"SetLDSRotation Off\n")
+            node.ser.write(b"SetMotor VacuumOff\n")
+            node.ser.write(b"SetMotor BrushOff\n")
+            node.ser.write(b"SetMotor SideBrushOff\n")
             node.ser.write(b"SetMotor 0 0 0\n")
             node.ser.close()
         node.destroy_node()
