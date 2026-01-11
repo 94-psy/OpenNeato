@@ -78,7 +78,15 @@ do_install() {
     whiptail --title "Building ROS 2 Workspace" --infobox "Compiling OpenNeato firmware (this may take a while)..." 8 78
     cd "$INSTALL_DIR/firmware/ros2_ws"
     
-    # Source ROS 2 Jazzy
+    # Source Virtual Python environment just created above
+    if [ -f "$INSTALL_DIR/venv/bin/activate" ]; then
+        source $INSTALL_DIR/venv/bin/activate
+    else
+        echo "Error: Could not source the python virtual environment $INSTALL_DIR/venv/bin/activate"
+        exit 1
+    fi
+
+    # Source ROS 2
     if [ -f "/opt/ros/jazzy/setup.bash" ]; then
         source /opt/ros/jazzy/setup.bash
     else

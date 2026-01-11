@@ -202,6 +202,9 @@ class MissionControl(Node):
                     # Pulisci file stato
                     if os.path.exists(self.state_file):
                         os.remove(self.state_file)
+                        
+                    self.get_logger().info("Missione completata. Rientro alla base.")
+                    self.return_to_base()
                 self.is_mission_active = False
 
     def abort_and_dock(self):
@@ -212,6 +215,12 @@ class MissionControl(Node):
         # Spegni motori pulizia immediatamente
         self.cleaning_pub.publish(Bool(data=False))
         
+        self.get_logger().info("Inviando richiesta al Docking Server...")
+        goal_msg = DockToBase.Goal()
+        self.docking_client.wait_for_server()
+        self.docking_client.send_goal_async(goal_msg)
+
+    def return_to_base(self):
         self.get_logger().info("Inviando richiesta al Docking Server...")
         goal_msg = DockToBase.Goal()
         self.docking_client.wait_for_server()
