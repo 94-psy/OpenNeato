@@ -23,6 +23,43 @@ if [ $exitstatus != 0 ]; then
     exit 0
 fi
 
+check_version() {
+    # Legge la versione corrente (appena scaricata nel repo)
+    if [ -f "VERSION" ]; then
+        NEW_VERSION=$(cat VERSION)
+    else
+        NEW_VERSION="Unknown"
+    fi
+
+    # Legge la versione installata (se esiste)
+    if [ -f "$INSTALL_DIR/VERSION" ]; then
+        CURRENT_VERSION=$(cat "$INSTALL_DIR/VERSION")
+    else
+        CURRENT_VERSION="None"
+    fi
+
+    # Confronto
+    if [ "$CURRENT_VERSION" != "None" ]; then
+        if [ "$CURRENT_VERSION" == "$NEW_VERSION" ]; then
+            if (whiptail --title "Version Check" --yesno "You already have version $CURRENT_VERSION installed.\nDo you want to reinstall/force update anyway?" 10 60); then
+                return 0 # Procedi
+            else
+                exit 0 # Esci
+            fi
+        else
+            whiptail --title "Update Detected" --msgbox "Updating from version $CURRENT_VERSION to $NEW_VERSION." 10 60
+        fi
+    fi
+}
+
+# Chiama la funzione solo se l'utente ha scelto "Install / Update"
+if [ "$CHOICE" == "1" ]; then
+    check_version
+    do_install
+elif [ "$CHOICE" == "2" ]; then
+    do_uninstall
+fi
+
 do_install() {
     # 1. System Check & Dependencies
     whiptail --title "System Update" --infobox "Updating apt repositories and installing dependencies..." 8 78
@@ -62,6 +99,10 @@ do_install() {
     else
         echo "Error: web_interface directory not found in $PWD"
         exit 1
+    fi
+
+    if [ -f "$PWD/VERSION" ]; then
+        cp "$PWD/VERSION" "$INSTALL_DIR/"
     fi
 
     if [ -f "$PWD/requirements.txt" ]; then
@@ -175,6 +216,7 @@ do_uninstall() {
 }
 
 case $CHOICE in
-    "1") do_install ;;
+    "1") do_install
+         check_version ;;
     "2") do_uninstall ;;
 esac
