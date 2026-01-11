@@ -13,6 +13,12 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+# Ensure Whiptail exists (for UI)
+if ! command -v whiptail &> /dev/null; then
+    echo "Installing required UI tools..."
+    apt-get update && apt-get install -y whiptail
+fi
+
 # Main Menu
 CHOICE=$(whiptail --title "OpenNeato Installer" --menu "Choose an option:" 15 60 2 \
 "1" "Install / Update" \
@@ -117,6 +123,14 @@ do_install() {
 
     "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt"
     "$INSTALL_DIR/venv/bin/pip" install colcon-common-extensions
+
+    # Sync Package Versions with Single Source of Truth
+    if [ -f "VERSION" ]; then
+        NEW_VER=$(cat VERSION)
+        echo "Syncing ROS package versions to $NEW_VER..."
+        # Cerca tutti i package.xml e sostituisce il tag versione
+        find "$INSTALL_DIR/firmware" -name package.xml -exec sed -i "s|<version>.*</version>|<version>$NEW_VER</version>|" {} +
+    fi
 
     # 5. Build Firmware
     whiptail --title "Building ROS 2 Workspace" --infobox "Compiling OpenNeato firmware (this may take a while)..." 8 78
