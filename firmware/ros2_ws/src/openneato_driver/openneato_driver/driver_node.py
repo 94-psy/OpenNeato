@@ -124,8 +124,8 @@ class NeatoDriver(Node):
     def main_loop(self):
         """Loop a 5Hz: Gestione connessione e lettura batteria."""
         # --- Watchdog Check ---
-        if self.connected and (time.time() - self.last_valid_packet_time > 1.0):
-            self.get_logger().error("WATCHDOG: Serial Communication Lost (>1.0s)")
+        if self.connected and (time.time() - self.last_valid_packet_time > 1.5):
+            self.get_logger().error("WATCHDOG: Serial Communication Lost (>1.5s)")
             self.handle_serial_failure()
             return
 
@@ -389,19 +389,9 @@ class NeatoDriver(Node):
         if time.time() < self.emergency_until:
             return
 
-        v = msg.linear.x
-        w = msg.angular.z
-
-        # Cinematica Differenziale
-        # v_left/right in m/s
-        v_left = v - (w * self.wheelbase / 2.0)
-        v_right = v + (w * self.wheelbase / 2.0)
-
-        # Conversione in mm/s
-        vl_mm = int(v_left * 1000)
-        vr_mm = int(v_right * 1000)
-        
-        # Calcolo Speed (max delle due velocità assolute)
+        v, w = msg.linear.x, msg.angular.z
+        vl_mm = int((v - (w * self.wheelbase / 2.0)) * 1000)
+        vr_mm = int((v + (w * self.wheelbase / 2.0)) * 1000)
         speed = max(abs(vl_mm), abs(vr_mm))
         
         # Il comando SetMotor del Neato accetta: LWheelDist, RWheelDist, Speed
@@ -409,13 +399,8 @@ class NeatoDriver(Node):
         # una distanza fittizia basata sulla velocità attuale per 1 secondo.
         # Se riceviamo cmd_vel a 10Hz, sovrascriveremo il comando prima che finisca.
         
-        if speed == 0:
-            cmd = "SetMotor 0 0 0"
-        else:
-            # Distanza da percorrere in 1 secondo a questa velocità
-            dist_l = vl_mm 
-            dist_r = vr_mm
-            cmd = f"SetMotor {dist_l} {dist_r} {speed}"
+        cmd = "SetMotor 0 0 0" if speed == 0 else f"SetMotor {vl_mm} {vr_mm} {speed}"
+        self.send_command(cmd)
 
         with self.serial_lock:
             try:

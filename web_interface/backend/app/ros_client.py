@@ -64,33 +64,6 @@ class RosClient(Node):
         self.current_state = "STOPPED"
         self.get_logger().info("Emergency Stop Sent")
 
-
-    # def start_cleaning(self, zone_ids: list, suction_power: int = 80):
-    #     """
-    #     Invia il comando di pulizia per le zone specificate al sistema ROS.
-    #     """
-    #     self.get_logger().info(f"Requesting cleaning for zones: {zone_ids}, Suction Power: {suction_power}")
-        
-    #     # Aggiorna stato interno
-    #     self.is_cleaning = True
-    #     self.current_state = f"CLEANING (Zones: {len(zone_ids)}, Power: {suction_power}%)"
-
-    #     try:
-    #         # Creazione del payload JSON con zone_ids
-    #         payload = json.dumps(zone_ids)
-            
-    #         msg = String()
-    #         msg.data = payload
-            
-    #         # Pubblicazione sul topic mission/start
-    #         self.mission_pub.publish(msg)
-    #         self.get_logger().info(f"Published mission/start command: {payload}")
-            
-    #     except Exception as e:
-    #         self.get_logger().error(f"Failed to publish cleaning command: {e}")
-    #         self.is_cleaning = False
-    #         self.current_state = "ERROR"
-    
     def start_cleaning(self, zone_ids: list, suction_power: int = 80):
         """
         Invia il comando di pulizia per le zone specificate al sistema ROS.
