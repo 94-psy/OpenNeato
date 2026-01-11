@@ -100,7 +100,7 @@ class MissionControl(Node):
         except Exception as e:
             self.get_logger().error(f"Error processing mission: {e}")
 
-    def load_zone_coordinates(self, zone_id):
+def load_zone_coordinates(self, zone_id):
         """Legge il config, estrae i vertici e usa il planner per generare il percorso."""
         if not os.path.exists(self.ZONES_CONFIG_FILE):
             self.get_logger().error("Zones config file not found.")
