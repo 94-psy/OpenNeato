@@ -40,6 +40,7 @@ class NeatoDriver(Node):
         self.connected = False
         self.emergency_until = 0.0
         self.last_valid_packet_time = time.time()
+        self.last_button_state = 0
 
         # --- Publishers ---
         self.battery_pub = self.create_publisher(BatteryState, '/battery_state', 10)
@@ -48,6 +49,8 @@ class NeatoDriver(Node):
         self.floor_pub = self.create_publisher(String, '/floor_type', 10)
         self.diag_pub = self.create_publisher(DiagnosticStatus, '/hazard_status', 10)
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10) # Safety stop
+        self.bumper_pub = self.create_publisher(String, 'sensors/bumper', 10)
+        self.button_pub = self.create_publisher(Bool, 'user_interface/button', 10)
 
         # --- Subscribers ---
         self.cmd_vel_sub = self.create_subscription(
@@ -181,6 +184,23 @@ class NeatoDriver(Node):
                     
                     if self.ser.in_waiting == 0: break
 
+                # --- Lettura Sensori Digitali (Bumper, Button) ---
+                self.ser.write(b"GetDigitalSensors\n")
+                start_time = time.time()
+                while (time.time() - start_time) < 0.5:
+                    raw_line = self.ser.readline()
+                    try:
+                        line = raw_line.decode('utf-8', errors='ignore').strip()
+                    except ValueError: continue
+
+                    if not line or len(line) < 3: continue
+                    parts = line.split(',')
+                    if len(parts) >= 2:
+                        try:
+                            sensors[parts[0]] = float(parts[1])
+                        except ValueError: pass
+                    if self.ser.in_waiting == 0: break
+
                 # Pubblica Batteria
                 if 'BatteryVoltageInmV' in sensors and 'BatteryLevel' in sensors:
                     msg = BatteryState()
@@ -199,6 +219,41 @@ class NeatoDriver(Node):
                 if (drop_l > 40 or drop_r > 40 or mag_l > 0 or mag_r > 0):
                     self.trigger_safety_reflex()
                 
+                # --- Logica Bumper ---
+                l_side = int(sensors.get('SNSR_LSIDEBIT', 0))
+                r_side = int(sensors.get('SNSR_RSIDEBIT', 0))
+                l_front = int(sensors.get('SNSR_LFRONTBIT', 0))
+                r_front = int(sensors.get('SNSR_RFRONTBIT', 0))
+                
+                bumper_msg = ""
+                hazards = []
+                
+                if l_front and r_front:
+                    bumper_msg = "CENTER"
+                    hazards = [(0.32, 0.0, 0.0), (0.32, 0.05, 0.0), (0.32, -0.05, 0.0)]
+                elif l_front:
+                    bumper_msg = "FRONT_LEFT"
+                    hazards = [(0.28, 0.12, 0.0), (0.25, 0.15, 0.0)]
+                elif r_front:
+                    bumper_msg = "FRONT_RIGHT"
+                    hazards = [(0.28, -0.12, 0.0), (0.25, -0.15, 0.0)]
+                elif l_side:
+                    bumper_msg = "LEFT"
+                    hazards = [(0.10, 0.18, 0.0), (0.0, 0.18, 0.0)]
+                elif r_side:
+                    bumper_msg = "RIGHT"
+                    hazards = [(0.10, -0.18, 0.0), (0.0, -0.18, 0.0)]
+                
+                if bumper_msg:
+                    self.bumper_pub.publish(String(data=bumper_msg))
+                    self.publish_hazard_cloud(hazards)
+
+                # --- Logica Bottone (Debounce) ---
+                btn = int(sensors.get('SNSR_SOFT_BTN', 0))
+                if btn == 1 and self.last_button_state == 0:
+                    self.button_pub.publish(Bool(data=True))
+                self.last_button_state = btn
+
                 # Carpet Detection
                 brush_ma = sensors.get('BrushMotorInmA', sensors.get('BrushCurrent', 0))
                 floor_msg = String()
@@ -225,7 +280,7 @@ class NeatoDriver(Node):
         diag.message = "Robot Stuck/Cliff Detected"
         self.diag_pub.publish(diag)
 
-    def publish_hazard_cloud(self):
+    def publish_hazard_cloud(self, points_list=None):
         msg = PointCloud2()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = "base_link"
@@ -238,12 +293,19 @@ class NeatoDriver(Node):
             PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
             PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
         ]
-        msg.point_step = 12
-        msg.row_step = 12 * msg.width
         points = []
-        for i in range(10):
-            y = -0.25 + (i * 0.05)
-            points.append(struct.pack('<fff', 0.2, y, 0.0))
+        
+        if points_list:
+            for x, y, z in points_list:
+                points.append(struct.pack('<fff', x, y, z))
+        else:
+            for i in range(10):
+                y = -0.25 + (i * 0.05)
+                points.append(struct.pack('<fff', 0.2, y, 0.0))
+        
+        msg.width = len(points)
+        msg.row_step = 12 * msg.width
+        msg.point_step = 12
         msg.data = b''.join(points)
         self.hazard_pub.publish(msg)
 

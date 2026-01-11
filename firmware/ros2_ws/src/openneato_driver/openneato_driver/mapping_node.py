@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import rclpy
 import math
+import time
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan, Imu
 from geometry_msgs.msg import Twist
+from std_msgs.msg import String
 from nav_msgs.msg import Odometry
 from rcl_interfaces.msg import SetParametersResult
 
@@ -15,6 +17,7 @@ class WallFollower(Node):
         self.sub_scan = self.create_subscription(LaserScan, 'scan', self.scan_callback, 10)
         self.sub_odom = self.create_subscription(Odometry, 'odom', self.odom_callback, 10)
         self.sub_imu = self.create_subscription(Imu, 'imu', self.imu_callback, 10)
+        self.sub_bumper = self.create_subscription(String, 'sensors/bumper', self.bumper_callback, 10)
 
         # Parametri ROS (PID e Navigazione)
         self.declare_parameter('kp', 2.0)
@@ -88,8 +91,22 @@ class WallFollower(Node):
             self.stop_robot()
             self.perform_recovery()
 
-    def perform_recovery(self):
-        """Manovra di sblocco: Indietro 15cm -> Ruota 30°"""
+    def bumper_callback(self, msg):
+        if self.is_recovering:
+            return
+
+        self.get_logger().info(f"Collision detected: {msg.data}")
+        self.stop_robot()
+
+        # Logica direzionale: Allontanarsi dall'ostacolo
+        direction = 1.0 # Default: Ruota a SX (CCW)
+        if "LEFT" in msg.data: # LEFT, FRONT_LEFT -> Ruota a DX
+            direction = -1.0
+        
+        self.perform_recovery(turn_direction=direction)
+
+    def perform_recovery(self, turn_direction=1.0):
+        """Manovra di sblocco: Indietro 15cm -> Ruota 30° * direction"""
         self.is_recovering = True
         
         # 1. Indietro 15cm (v=-0.15 m/s per 1s)
@@ -98,9 +115,9 @@ class WallFollower(Node):
         self.pub_vel.publish(twist)
         time.sleep(1.0)
         
-        # 2. Ruota 30° (v_ang=0.5 rad/s per ~1s)
+        # 2. Ruota 30° (v_ang=0.5 rad/s per ~1s) * direction
         twist.linear.x = 0.0
-        twist.angular.z = 0.5
+        twist.angular.z = 0.5 * turn_direction
         self.pub_vel.publish(twist)
         time.sleep(1.0)
         
