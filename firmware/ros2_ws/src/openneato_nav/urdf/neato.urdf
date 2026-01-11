@@ -1,0 +1,10 @@
+<robot name="ryans_neato">
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.18" length="0.2"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+  </link>
+</robot>
