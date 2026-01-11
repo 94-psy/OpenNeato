@@ -81,14 +81,17 @@ class MissionControl(Node):
                 # Recupera i waypoint per la zona specifica
                 zone_waypoints = self.load_zone_coordinates(zone_id)
                 
-                # Task 2: Usa extend per aggiungere la lista di PoseStamped alla lista principale
+                # Usa extend per aggiungere la lista di PoseStamped alla lista principale
                 if zone_waypoints:
                     waypoints.extend(zone_waypoints)
                     self.get_logger().info(f"Added {len(zone_waypoints)} waypoints for zone {zone_id}")
             
             if waypoints:
+                self.current_waypoints = waypoints
+                self.current_waypoint_index = 0
+                self.is_mission_active = True
                 self.get_logger().info(f"Starting mission execution with {len(waypoints)} total waypoints")
-                self.execute_mission(waypoints)
+                self.navigator.followWaypoints(self.current_waypoints)
             else:
                 self.get_logger().warn("Mission request resulted in no valid waypoints")
                 
@@ -97,35 +100,11 @@ class MissionControl(Node):
         except Exception as e:
             self.get_logger().error(f"Error processing mission: {e}")
 
-        """Riceve una lista JSON di ID zona e avvia la missione."""
-        try:
-            zone_ids = json.loads(msg.data)
-            self.get_logger().info(f"Ricevuta richiesta pulizia per zone: {zone_ids}")
-            
-            waypoints = []
-            for z_id in zone_ids:
-                pose = self.load_zone_coordinates(z_id)
-                if pose:
-                    waypoints.append(pose)
-            
-            if waypoints:
-                self.current_waypoints = waypoints
-                self.current_waypoint_index = 0
-                self.is_mission_active = True
-                self.navigator.followWaypoints(self.current_waypoints)
-                self.get_logger().info(f"Navigazione avviata verso {len(waypoints)} zone.")
-            else:
-                self.get_logger().warn("Nessuna coordinata valida trovata per le zone richieste.")
-                
-        except json.JSONDecodeError:
-            self.get_logger().error("Errore decodifica JSON richiesta missione.")
-
     def load_zone_coordinates(self, zone_id):
-        
-        """Legge il config e calcola il baricentro della zona."""
+        """Legge il config e genera il percorso di copertura."""
         if not os.path.exists(self.ZONES_CONFIG_FILE):
             self.get_logger().error("File configurazione zone non trovato.")
-            return None
+            return []
             
         try:
             with open(self.ZONES_CONFIG_FILE, 'r') as f:
@@ -135,22 +114,18 @@ class MissionControl(Node):
                 if zone.get('id') == zone_id:
                     points = zone.get('points', [])
                     if not points:
-                        return None
+                        return []
                     
-                    # Calcolo Baricentro (Media X, Media Y)
-                    avg_x = sum(p['x'] for p in points) / len(points)
-                    avg_y = sum(p['y'] for p in points) / len(points)
+                    # Estrai una lista di tuple coordinate
+                    points_tuple = [(p['x'], p['y']) for p in points]
                     
-                    # Crea PoseStamped
-                    p = PoseStamped()
-                    p.header.frame_id = 'map'
-                    p.pose.position.x = avg_x
-                    p.pose.position.y = avg_y
-                    p.pose.orientation.w = 1.0 # Orientamento neutro
-                    return p
+                    # Chiama il planner per generare il percorso
+                    waypoints = self.coverage_planner.generate_boustrophedon_path(points_tuple)
+                    return waypoints
+                    
         except Exception as e:
             self.get_logger().error(f"Errore lettura zone: {e}")
-        return None
+        return []
 
     
     def save_state(self):

@@ -3,7 +3,6 @@ import time
 import rclpy
 import json
 from std_msgs.msg import String
-import json
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import BatteryState
@@ -40,23 +39,31 @@ class RosClient(Node):
         # Normalizza se necessario (assumiamo 0.0-1.0 o 0-100)
         self.battery_level = msg.percentage * 100.0 if msg.percentage <= 1.0 else msg.percentage
 
-    def start_cleaning(self, zone_ids: list):
+    def start_cleaning(self, zone_ids: list, suction_power: int = 80):
         """
         Invia il comando di pulizia per le zone specificate al sistema ROS.
         """
+        self.get_logger().info(f"Requesting cleaning for zones: {zone_ids}, Suction Power: {suction_power}")
+        
+        # Aggiorna stato interno
+        self.is_cleaning = True
+        self.current_state = f"CLEANING (Zones: {len(zone_ids)}, Power: {suction_power}%)"
+
         try:
-            # Task 1: Conversione della lista zone_ids in stringa JSON
+            # Creazione del payload JSON con zone_ids
             payload = json.dumps(zone_ids)
             
             msg = String()
             msg.data = payload
             
-            # Task 1: Pubblicazione sul topic mission/start
+            # Pubblicazione sul topic mission/start
             self.mission_pub.publish(msg)
             self.get_logger().info(f"Published mission/start command: {payload}")
             
         except Exception as e:
             self.get_logger().error(f"Failed to publish cleaning command: {e}")
+            self.is_cleaning = False
+            self.current_state = "ERROR"
 
     def start(self):
         """Avvia il thread di spinning ROS 2."""
@@ -82,13 +89,6 @@ class RosClient(Node):
         self.is_cleaning = False
         self.current_state = "STOPPED"
         self.get_logger().info("Emergency Stop Sent")
-
-    def start_cleaning(self, zone_ids: list, suction_power: int):
-        """Simula l'avvio della pulizia (Action Client placeholder)."""
-        # Qui andrebbe l'Action Client per Nav2 o logica custom
-        self.is_cleaning = True
-        self.current_state = f"CLEANING (Zones: {len(zone_ids)}, Power: {suction_power}%)"
-        self.get_logger().info(f"Cleaning started: {self.current_state}")
 
 # Esempio di funzione helper per avviare il nodo (dipende dall'architettura FastAPI/Uvicorn)
 def init_ros_node():
