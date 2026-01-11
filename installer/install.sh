@@ -4,6 +4,9 @@
 REPO_URL="https://github.com/94-psy/OpenNeato.git"
 INSTALL_DIR="/opt/openneato"
 
+# ROS Distribution (kilted, jazzy, rolling, etc.)
+ROS_DISTRO="kilted"
+
 # Check Root
 if [ "$EUID" -ne 0 ]; then
   echo "Please run as root (sudo ./install.sh)"
@@ -24,7 +27,7 @@ do_install() {
     # 1. System Check & Dependencies
     whiptail --title "System Update" --infobox "Updating apt repositories and installing dependencies..." 8 78
     apt-get update
-    apt-get install -y ros-jazzy-ros-base ros-jazzy-nav2-simple-commander ros-jazzy-rosbridge-server python3-venv git build-essential rsync
+    apt-get install -y ros-${ROS_DISTRO}-ros-base ros-${ROS_DISTRO}-nav2-simple-commander ros-${ROS_DISTRO}-rosbridge-server python3-venv git build-essential rsync
     
     # Time Persistence (Fake HW Clock) for systems without RTC
     # Prevents ROS 2 TF errors due to negative time jumps on boot
@@ -87,10 +90,10 @@ do_install() {
     fi
 
     # Source ROS 2
-    if [ -f "/opt/ros/jazzy/setup.bash" ]; then
-        source /opt/ros/jazzy/setup.bash
+    if [ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]; then
+        source /opt/ros/${ROS_DISTRO}/setup.bash
     else
-        echo "Error: ROS 2 Jazzy not found in /opt/ros/jazzy"
+        echo "Error: ROS 2 ${ROS_DISTRO} not found in /opt/ros/${ROS_DISTRO}"
         exit 1
     fi
 
@@ -107,12 +110,39 @@ do_install() {
     fi
 
     # Systemd
-    if [ -f "$PWD/config/systemd/openneato-core.service" ]; then
-        cp "$PWD/config/systemd/openneato-core.service" /etc/systemd/system/
-    fi
-    if [ -f "$PWD/config/systemd/openneato-web.service" ]; then
-        cp "$PWD/config/systemd/openneato-web.service" /etc/systemd/system/
-    fi
+    # Generate services dynamically to inject ROS_DISTRO
+    cat <<EOF > /etc/systemd/system/openneato-core.service
+[Unit]
+Description=OpenNeato Core ROS 2
+After=network.target
+
+[Service]
+User=root
+# Utilizziamo bash -c per fare il source dell'ambiente ROS 2 e del workspace locale prima del lancio
+ExecStart=/bin/bash -c 'source /opt/ros/${ROS_DISTRO}/setup.bash && source /opt/openneato/firmware/ros2_ws/install/setup.bash && exec /opt/openneato/venv/bin/ros2 launch openneato_nav navigation_launch.py'
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    cat <<EOF > /etc/systemd/system/openneato-web.service
+[Unit]
+Description=OpenNeato Web Interface
+After=openneato-core.service
+
+[Service]
+User=root
+WorkingDirectory=/opt/openneato/web_interface/backend
+# Source necessario per rclpy
+ExecStart=/bin/bash -c 'source /opt/ros/${ROS_DISTRO}/setup.bash && source /opt/openneato/firmware/ros2_ws/install/setup.bash && exec /opt/openneato/venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 80'
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
 
     systemctl daemon-reload
     systemctl enable openneato-core.service

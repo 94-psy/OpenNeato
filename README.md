@@ -1,10 +1,10 @@
 # OpenNeato
 
 ![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
-![ROS 2 Jazzy](https://img.shields.io/badge/ROS_2-Jazzy-22314E.svg)
+![ROS 2](https://img.shields.io/badge/ROS_2-22314E.svg)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)
 
-**OpenNeato** is an open-source project designed to breathe new life into Neato robotic vacuums (specifically tested on the Neato D7) by replacing the proprietary logic board functions with a modern Single Board Computer (SBC) running **ROS 2 Jazzy**.
+**OpenNeato** is an open-source project designed to breathe new life into Neato robotic vacuums (specifically tested on the Neato D7) by replacing the proprietary logic board functions with a modern Single Board Computer (SBC) running **ROS 2**.
 
 This project transforms your old vacuum into a smart, fully autonomous robot capable of advanced mapping, navigation, and web-based control, leveraging the power of the `nav2` stack and a custom Python-based driver.
 
