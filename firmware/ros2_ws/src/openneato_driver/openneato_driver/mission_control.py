@@ -7,7 +7,6 @@ from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String, Bool
 from sensor_msgs.msg import BatteryState
-from diagnostic_msgs.msg import DiagnosticStatus
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 from rclpy.action import ActionClient
 from openneato_driver.coverage_planner import ZoneCoveragePlanner
@@ -22,50 +21,35 @@ except ImportError:
 class MissionControl(Node):
     def __init__(self):
         super().__init__('mission_control')
-
-        self.subscription = self.create_subscription(
-            String,
-            'mission/start',
-            self.mission_start_callback,
-            10)
         
-        # Task 1 & 2: Publishers per controllo pulizia e stato
-        self.cleaning_pub = self.create_publisher(Bool, 'cleaning/active', 10)
-        self.status_pub = self.create_publisher(String, 'mission/status', 10)
-        self.hazard_sub = self.create_subscription(DiagnosticStatus, '/hazard_status', self.hazard_callback, 10)
-            
-        # Task 2: Istanziazione del planner con stride di 0.25m
-        self.coverage_planner = ZoneCoveragePlanner(stride=0.25)
-        
-        # Placeholder per il database delle zone (in produzione verrebbe caricato da file/param)
-        self.zones = {
-            # Esempio struttura: 'soggiorno': [(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]
-        }
-        self.get_logger().info("Mission Control initialized with ZoneCoveragePlanner")
-
-        
+        # --- Navigazione & Action Clients ---
         self.navigator = BasicNavigator()
         self.docking_client = ActionClient(self, DockToBase, 'dock_to_base')
-
-        # Planner per copertura a zig-zag (stride 0.25m)
+        
+        # --- Planner (Zig-Zag) ---
+        # Stride 0.25m = passo laterale tra una passata e l'altra
         self.coverage_planner = ZoneCoveragePlanner(stride=0.25)
         
+        # --- Subscribers ---
         self.sub_battery = self.create_subscription(BatteryState, 'battery_state', self.battery_callback, 10)
         self.sub_mission = self.create_subscription(String, 'mission/start', self.mission_start_callback, 10)
         
+        # --- Publishers (NUOVO: Controllo Aspirazione) ---
+        self.cleaning_pub = self.create_publisher(Bool, 'cleaning/active', 10)
+        
+        # --- Configurazione e Stato ---
         self.state_file = "mission_dump.json"
+        self.ZONES_CONFIG_FILE = "/opt/openneato/web_interface/backend/config.json"
+        
         self.battery_level = 100.0
         self.is_mission_active = False
         self.current_waypoints = []
         self.current_waypoint_index = 0
         
-        # Configurazione Zone
-        self.ZONES_CONFIG_FILE = "/opt/openneato/web_interface/backend/config.json"
-        
+        # --- Timers ---
         # Timer persistenza (10s)
         self.create_timer(10.0, self.save_state)
-        
-        # Timer logica principale
+        # Timer logica principale (1s)
         self.create_timer(1.0, self.control_loop)
 
         self.get_logger().info("Mission Control Initialized")
@@ -77,16 +61,6 @@ class MissionControl(Node):
         # Normalizza percentuale 0-100
         self.battery_level = msg.percentage if msg.percentage > 1.0 else msg.percentage * 100.0
 
-    def hazard_callback(self, msg):
-        """Task 3: Safety Stop immediato in caso di pericolo."""
-        if msg.level == DiagnosticStatus.ERROR:
-            self.get_logger().error(f"HAZARD DETECTED: {msg.message}")
-            self.cleaning_pub.publish(Bool(data=False))
-            self.status_pub.publish(String(data="ERROR"))
-            if self.is_mission_active:
-                self.navigator.cancelTask()
-                self.is_mission_active = False
-
     def mission_start_callback(self, msg):
         self.get_logger().info(f"Received mission request: {msg.data}")
         try:
@@ -94,10 +68,9 @@ class MissionControl(Node):
             waypoints = []
             
             for zone_id in zone_ids:
-                # Recupera i waypoint per la zona specifica
+                # Recupera i waypoint per la zona specifica (già calcolati a zig-zag)
                 zone_waypoints = self.load_zone_coordinates(zone_id)
                 
-                # Usa extend per aggiungere la lista di PoseStamped alla lista principale
                 if zone_waypoints:
                     waypoints.extend(zone_waypoints)
                     self.get_logger().info(f"Added {len(zone_waypoints)} waypoints for zone {zone_id}")
@@ -107,9 +80,9 @@ class MissionControl(Node):
                 self.current_waypoint_index = 0
                 self.is_mission_active = True
                 
-                # Attiva pulizia e aggiorna stato
+                # --- AZIONE CRITICA: ACCENDI ASPIRAPOLVERE ---
                 self.cleaning_pub.publish(Bool(data=True))
-                self.status_pub.publish(String(data="CLEANING"))
+                self.get_logger().info("Cleaning Motors ACTIVATED")
                 
                 self.get_logger().info(f"Starting mission execution with {len(waypoints)} total waypoints")
                 self.navigator.followWaypoints(self.current_waypoints)
@@ -133,8 +106,6 @@ class MissionControl(Node):
                 
             for zone in zones:
                 if zone.get('id') == zone_id:
-                    # Verifica come si chiama la chiave nel tuo JSON. 
-                    # Nel models.py del backend si chiama 'coordinates', quindi usiamo quello.
                     points = zone.get('coordinates', []) 
                     
                     if not points:
@@ -150,7 +121,6 @@ class MissionControl(Node):
                         else:
                             points_tuple.append((p[0], p[1]))
                 
-            
                     # Genera serpentina usando la lista pulita di tuple
                     return self.coverage_planner.generate_boustrophedon_path(points_tuple)
                     
@@ -166,7 +136,7 @@ class MissionControl(Node):
             "timestamp": time.time(),
             "waypoints": [self.pose_to_dict(p) for p in self.current_waypoints],
             "current_index": self.current_waypoint_index,
-            "zone": "living_room" # Placeholder per logica zone
+            "zone": "living_room" 
         }
         
         try:
@@ -201,12 +171,13 @@ class MissionControl(Node):
             self.get_logger().info("Missione completata o vuota nel dump.")
             return
 
-        # Ricostruisci oggetti PoseStamped
         self.current_waypoints = [self.dict_to_pose(p) for p in raw_waypoints]
         self.current_waypoint_index = start_index
         
-        # Riprendi dal punto corrente
         remaining_poses = self.current_waypoints[start_index:]
+        
+        # Resume: Accendi aspiratore e vai
+        self.cleaning_pub.publish(Bool(data=True))
         self.navigator.followWaypoints(remaining_poses)
         self.is_mission_active = True
 
@@ -224,9 +195,9 @@ class MissionControl(Node):
                 if result == TaskResult.SUCCEEDED:
                     self.get_logger().info("Missione completata!")
                     
-                    # Ferma pulizia e aggiorna stato
+                    # --- AZIONE CRITICA: SPEGNI ASPIRAPOLVERE ---
                     self.cleaning_pub.publish(Bool(data=False))
-                    self.status_pub.publish(String(data="IDLE"))
+                    self.get_logger().info("Cleaning Motors DEACTIVATED")
                     
                     # Pulisci file stato
                     if os.path.exists(self.state_file):
@@ -235,12 +206,11 @@ class MissionControl(Node):
 
     def abort_and_dock(self):
         self.navigator.cancelTask()
-        
-        self.cleaning_pub.publish(Bool(data=False))
-        self.status_pub.publish(String(data="DOCKING"))
-        
-        self.save_state() # Salva ultimo stato noto
+        self.save_state()
         self.is_mission_active = False
+        
+        # Spegni motori pulizia immediatamente
+        self.cleaning_pub.publish(Bool(data=False))
         
         self.get_logger().info("Inviando richiesta al Docking Server...")
         goal_msg = DockToBase.Goal()
