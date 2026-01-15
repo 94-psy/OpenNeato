@@ -58,23 +58,22 @@ check_version() {
     fi
 }
 
-# Chiama la funzione solo se l'utente ha scelto "Install / Update"
-if [ "$CHOICE" == "1" ]; then
-    check_version
-    do_install
-elif [ "$CHOICE" == "2" ]; then
-    do_uninstall
-fi
+
 
 do_install() {
     # 1. System Check & Dependencies
     whiptail --title "System Update" --infobox "Updating apt repositories and installing dependencies..." 8 78
-    apt-get update
-    apt-get install -y ros-${ROS_DISTRO}-ros-base ros-${ROS_DISTRO}-nav2-simple-commander ros-${ROS_DISTRO}-rosbridge-server python3-venv git build-essential rsync
+    apt update
+    sudo apt update
+    sudo apt install -y software-properties-common curl
+    sudo add-apt-repository universe
+    sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+    apt install -y ros-${ROS_DISTRO}-ros-base ros-${ROS_DISTRO}-nav2-simple-commander ros-${ROS_DISTRO}-rosbridge-server python3-venv git build-essential rsync
     
     # Time Persistence (Fake HW Clock) for systems without RTC
     # Prevents ROS 2 TF errors due to negative time jumps on boot
-    apt-get install -y fake-hwclock
+    apt install -y fake-hwclock
     systemctl enable fake-hwclock
     systemctl start fake-hwclock
     fake-hwclock save
@@ -210,6 +209,7 @@ EOF
     whiptail --title "Installation Complete" --msgbox "OpenNeato installed successfully!\n\nDashboard URL: http://$IP_ADDR\n\nServices started." 12 60
 }
 
+
 do_uninstall() {
     whiptail --title "Uninstall" --yesno "Are you sure you want to remove OpenNeato?" 10 60
     if [ $? -eq 0 ]; then
@@ -228,6 +228,14 @@ do_uninstall() {
         whiptail --title "Uninstall" --msgbox "OpenNeato has been removed." 8 40
     fi
 }
+
+# Chiama la funzione solo se l'utente ha scelto "Install / Update"
+if [ "$CHOICE" == "1" ]; then
+    check_version
+    do_install
+elif [ "$CHOICE" == "2" ]; then
+    do_uninstall
+fi
 
 case $CHOICE in
     "1") do_install
