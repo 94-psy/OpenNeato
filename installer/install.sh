@@ -172,7 +172,7 @@ After=network.target
 
 [Service]
 User=root
-# Utilizziamo bash -c per fare il source dell'ambiente ROS 2 e del workspace locale prima del lancio
+# Utilizziamo bash -c per fare il source dell'ambiente
 ExecStart=/bin/bash -c 'source /opt/ros/${ROS_DISTRO}/setup.bash && source /opt/openneato/firmware/ros2_ws/install/setup.bash && exec /opt/openneato/venv/bin/ros2 launch openneato_nav navigation_launch.py'
 Restart=always
 RestartSec=10
@@ -189,7 +189,6 @@ After=openneato-core.service
 [Service]
 User=root
 WorkingDirectory=/opt/openneato/web_interface/backend
-# Source necessario per rclpy
 ExecStart=/bin/bash -c 'source /opt/ros/${ROS_DISTRO}/setup.bash && source /opt/openneato/firmware/ros2_ws/install/setup.bash && exec /opt/openneato/venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 80'
 Restart=always
 RestartSec=10
@@ -230,15 +229,12 @@ do_uninstall() {
 }
 
 # Chiama la funzione solo se l'utente ha scelto "Install / Update"
-if [ "$CHOICE" == "1" ]; then
-    check_version
-    do_install
-elif [ "$CHOICE" == "2" ]; then
-    do_uninstall
-fi
-
 case $CHOICE in
-    "1") do_install
-         check_version ;;
-    "2") do_uninstall ;;
+    "1") 
+        check_version  # Prima controlliamo
+        do_install     # Poi installiamo
+        ;;
+    "2") 
+        do_uninstall 
+        ;;
 esac
