@@ -39,6 +39,8 @@ We recommend **Ubuntu 24.04 Server** (Joshua Riek's Rockchip build is currently 
     sudo gdisk Radxa_Zero3_NPU_Ubuntu24.img
     ```
     * Press in order `x` (menu expert), `e` (relocate backup data structures to the end of the disk), `w` (write), `Y`
+  
+      
     * Resize the partition:
     ```bash
     sudo losetup -fP --show Radxa_Zero3_NPU_Ubuntu24.img
@@ -80,8 +82,9 @@ We recommend **Ubuntu 24.04 Server** (Joshua Riek's Rockchip build is currently 
             "WIFI2":
               password: "passwd2"
     ```
-    * Save and exit `CTRL+o` and `CTRL+x`
-    * Exit and umount
+    * Save and exit `CTRL + o` and `CTRL + x`
+    * 
+    * Exit and umount:
     ```bash
     sudo chmod 600 01-netcfg.yaml
     cd ../../../
