@@ -124,10 +124,10 @@ class NeatoDriver(Node):
             self.get_logger().info("CLEANING START: Attivazione motori aspirazione.")
             # Accende Aspirazione, Spazzola Principale e Spazzola Laterale
             # Nota: 'VacuumOn' usa parametri di default. Se servisse potenza specifica: SetMotor VacuumSpeed 90
-            self.send_command("SetMotor VacuumOn BrushOn SideBrushOn")
+            self.send_command("SetMotor Vacuum On Brush On SideBrush On")
         else:
             self.get_logger().info("CLEANING STOP: Spegnimento motori.")
-            self.send_command("SetMotor VacuumOff BrushOff SideBrushOff")
+            self.send_command("SetMotor Vacuum Off Brush Off SideBrush Off")
 
     def main_loop(self):
         # Watchdog
@@ -153,7 +153,7 @@ class NeatoDriver(Node):
         self.cmd_vel_pub.publish(stop_msg)
         
         self.connected = False
-        self.send_command("SetMotor 0 0 0") # Tenta stop fisico
+        self.send_command("SetMotor LWheelDist 0 RWheelDist 0 Speed 0") # Tenta stop fisico
         self.connect_serial()
 
     def read_sensors(self):
@@ -271,7 +271,7 @@ class NeatoDriver(Node):
         self.get_logger().warn("SAFETY REFLEX! Drop/Mag detected.")
         self.emergency_until = now + 2.0
         with self.serial_lock:
-            self.ser.write(b"SetMotor -100 -100 100\n")
+            self.ser.write(b"SetMotor LWheelDist -100 RWheelDist -100 Speed 100\n")
         self.publish_hazard_cloud()
         
         diag = DiagnosticStatus()
@@ -371,7 +371,7 @@ class NeatoDriver(Node):
         vl_mm = int((v - (w * self.wheelbase / 2.0)) * 1000)
         vr_mm = int((v + (w * self.wheelbase / 2.0)) * 1000)
         speed = max(abs(vl_mm), abs(vr_mm))
-        cmd = "SetMotor 0 0 0" if speed == 0 else f"SetMotor {vl_mm} {vr_mm} {speed}"
+        cmd = "SetMotor LWheelDist 0 RWheelDist 0 Speed 0" if speed == 0 else f"SetMotor LWheelDist {vl_mm} RWheelDist {vr_mm} Speed {speed}"
         self.send_command(cmd)
 
     def play_sound_callback(self, msg):
@@ -387,7 +387,7 @@ def main(args=None):
     finally:
         if node.ser and node.ser.is_open:
             node.ser.write(b"SetLDSRotation Off\n")
-            node.ser.write(b"SetMotor 0 0 0\n")
+            node.ser.write(b"SetMotor LWheelDist 0 RWheelDist 0 Speed 0\n")
             node.ser.close()
         node.destroy_node()
         rclpy.shutdown()
