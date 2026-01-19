@@ -124,10 +124,10 @@ class NeatoDriver(Node):
             self.get_logger().info("CLEANING START: Attivazione motori aspirazione.")
             # Accende Aspirazione, Spazzola Principale e Spazzola Laterale
             # Nota: 'VacuumOn' usa parametri di default. Se servisse potenza specifica: SetMotor VacuumSpeed 90
-            self.send_command("SetMotor Vacuum On Brush On SideBrush On")
+            self.send_command("SetMotor VacuumOn Brush RPM 1000 SideBrushOn")
         else:
             self.get_logger().info("CLEANING STOP: Spegnimento motori.")
-            self.send_command("SetMotor Vacuum Off Brush Off SideBrush Off")
+            self.send_command("SetMotor VacuumOff BrushDisable SideBrushOff")
 
     def main_loop(self):
         # Watchdog
@@ -249,7 +249,7 @@ class NeatoDriver(Node):
                     self.publish_hazard_cloud(hazards)
 
                 # --- Logica Bottone (Debounce) ---
-                btn = int(sensors.get('SNSR_SOFT_BTN', 0))
+                btn = int(sensors.get('BTN_START', 0))
                 if btn == 1 and self.last_button_state == 0:
                     self.button_pub.publish(Bool(data=True))
                 self.last_button_state = btn
