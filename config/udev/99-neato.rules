@@ -1,1 +1,1 @@
-KERNEL=="ttyAMA0", SYMLINK+="ttyNeato"
+KERNEL=="ttyACM*", SYMLINK+="ttyNeato"
