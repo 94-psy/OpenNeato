@@ -2,6 +2,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, Command
 from launch_ros.actions import Node
@@ -40,6 +41,12 @@ def generate_launch_description():
         description='Full path to the ROS2 parameters file to use for all launched nodes'
     )
 
+    declare_slam_cmd = DeclareLaunchArgument(
+        'slam',
+        default_value='False',
+        description='Whether run a SLAM'
+    )
+
     # --- Nodes ---
 
     # 1. Neato Driver (Hardware Interface)
@@ -73,6 +80,15 @@ def generate_launch_description():
         parameters=[{'use_sim_time': use_sim_time}]
     )
 
+    # SLAM Toolbox
+    slam_toolbox_node = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(get_package_share_directory('slam_toolbox'), 'launch', 'online_async_launch.py')
+        ),
+        condition=IfCondition(LaunchConfiguration('slam')),
+        launch_arguments={'use_sim_time': use_sim_time}.items()
+    )
+
     # 4. Nav2 Bringup (AMCL, Planner, Controller, Costmaps)
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -90,8 +106,10 @@ def generate_launch_description():
         declare_use_sim_time,
         declare_map_yaml_cmd,
         declare_params_file_cmd,
+        declare_slam_cmd,
         neato_driver_node,
         robot_state_publisher_node,
         rosbridge_node,
+        slam_toolbox_node,
         nav2_launch
     ])

@@ -144,6 +144,7 @@ install_dependencies() {
     PACKAGES=(
         "ros-${ROS_DISTRO}-ros-base"
         "ros-${ROS_DISTRO}-nav2-simple-commander"
+        "ros-${ROS_DISTRO}-slam-toolbox"
         "ros-${ROS_DISTRO}-rosbridge-server"
         "python3-venv"
         "git"
