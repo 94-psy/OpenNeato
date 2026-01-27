@@ -21,6 +21,8 @@ setup(
     entry_points={
         'console_scripts': [
             'neato_driver = openneato_driver.driver_node:main',
+            'mission_control = openneato_driver.mission_control:main',
+            'docking_server = openneato_driver.docking_server:main',
         ],
     },
 )

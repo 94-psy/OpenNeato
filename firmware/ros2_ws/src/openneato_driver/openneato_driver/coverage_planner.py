@@ -18,9 +18,26 @@ class ZoneCoveragePlanner:
         """
         self.stride = stride
 
+    def is_point_in_polygon(self, x: float, y: float, polygon: List[Tuple[float, float]]) -> bool:
+        """
+        Verifica se il punto (x,y) è interno al poligono usando Ray Casting.
+        """
+        inside = False
+        j = len(polygon) - 1
+        for i in range(len(polygon)):
+            xi, yi = polygon[i]
+            xj, yj = polygon[j]
+            
+            intersect = ((yi > y) != (yj > y)) and \
+                        (x < (xj - xi) * (y - yi) / (yj - yi) + xi)
+            if intersect:
+                inside = not inside
+            j = i
+        return inside
+
     def generate_boustrophedon_path(self, zone_points: List[Tuple[float, float]]) -> List[PoseStamped]:
         """
-        Genera una lista di waypoint a zig-zag basata sul Bounding Box dei punti forniti.
+        Genera una lista di waypoint a zig-zag filtrando i punti esterni al poligono.
         
         Args:
             zone_points: Lista di tuple (x, y) che definiscono i vertici della zona.
@@ -32,7 +49,6 @@ class ZoneCoveragePlanner:
             return []
 
         # 1. Calcolo Bounding Box
-        # Estraiamo min/max X e Y dai punti forniti
         x_coords = [p[0] for p in zone_points]
         y_coords = [p[1] for p in zone_points]
         
@@ -43,32 +59,29 @@ class ZoneCoveragePlanner:
         y = y_min
         row_count = 0
         
-        # 2. Generazione percorso a serpentina
-        # Iteriamo lungo l'asse Y con passo 'stride' fino a coprire Y_max
+        # 2. Generazione percorso a griglia filtrata (Grid-based Boustrophedon)
         while y <= y_max:
-            # Creiamo i PoseStamped per inizio e fine riga
-            p_start = PoseStamped()
-            p_start.header.frame_id = "map"
-            p_start.pose.position.y = y
-            p_start.pose.orientation.w = 1.0 # Orientamento neutro
+            row_waypoints = []
+            x = x_min
             
-            p_end = PoseStamped()
-            p_end.header.frame_id = "map"
-            p_end.pose.position.y = y
-            p_end.pose.orientation.w = 1.0
+            # Scansiona la riga X
+            while x <= x_max:
+                if self.is_point_in_polygon(x, y, zone_points):
+                    p = PoseStamped()
+                    p.header.frame_id = "map"
+                    p.pose.position.x = x
+                    p.pose.position.y = y
+                    p.pose.position.z = 0.0
+                    p.pose.orientation.w = 1.0
+                    row_waypoints.append(p)
+                x += self.stride
 
-            if row_count % 2 == 0:
-                # Riga pari: Da Sinistra (X_min) a Destra (X_max)
-                p_start.pose.position.x = x_min
-                p_end.pose.position.x = x_max
-            else:
-                # Riga dispari: Da Destra (X_max) a Sinistra (X_min)
-                p_start.pose.position.x = x_max
-                p_end.pose.position.x = x_min
-
-            # Aggiungiamo i punti alla lista
-            waypoints.append(p_start)
-            waypoints.append(p_end)
+            # Se abbiamo trovato punti validi in questa riga
+            if row_waypoints:
+                # Se riga dispari, inverti ordine (zig-zag)
+                if row_count % 2 != 0:
+                    row_waypoints.reverse()
+                waypoints.extend(row_waypoints)
             
             y += self.stride
             row_count += 1

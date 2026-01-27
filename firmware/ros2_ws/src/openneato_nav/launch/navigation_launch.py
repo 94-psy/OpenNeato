@@ -58,6 +58,24 @@ def generate_launch_description():
         parameters=[{'use_sim_time': use_sim_time}]
     )
 
+    # Mission Control Node
+    mission_control_node = Node(
+        package='openneato_driver',
+        executable='mission_control',
+        name='mission_control',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}]
+    )
+
+    # Docking Server Node
+    docking_server_node = Node(
+        package='openneato_driver',
+        executable='docking_server',
+        name='docking_server',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}]
+    )
+
     # 2. Robot State Publisher (TF)
     # Legge l'URDF e lo pubblica su /robot_description
     robot_state_publisher_node = Node(
@@ -108,6 +126,8 @@ def generate_launch_description():
         declare_params_file_cmd,
         declare_slam_cmd,
         neato_driver_node,
+        mission_control_node,
+        docking_server_node,
         robot_state_publisher_node,
         rosbridge_node,
         slam_toolbox_node,

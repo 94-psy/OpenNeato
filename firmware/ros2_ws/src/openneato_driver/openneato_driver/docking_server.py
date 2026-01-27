@@ -175,17 +175,19 @@ class DockingServer(Node):
         if self.latest_scan is None:
             return None
         
-        weighted_angle_sum = 0.0
+        sum_sin = 0.0
+        sum_cos = 0.0
         intensity_sum = 0.0
         
         for i, intensity in enumerate(self.latest_scan.intensities):
             if intensity > self.intensity_threshold:
                 angle = self.latest_scan.angle_min + (i * self.latest_scan.angle_increment)
-                weighted_angle_sum += angle * intensity
+                sum_sin += intensity * math.sin(angle)
+                sum_cos += intensity * math.cos(angle)
                 intensity_sum += intensity
         
         if intensity_sum > 0:
-            return weighted_angle_sum / intensity_sum
+            return math.atan2(sum_sin, sum_cos)
             
         return None
 
