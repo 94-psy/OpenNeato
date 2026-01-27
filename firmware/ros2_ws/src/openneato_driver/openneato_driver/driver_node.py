@@ -36,7 +36,9 @@ class NeatoDriver(Node):
 
         # --- Serial Interface ---
         self.ser = None
-        self.serial_lock = threading.Lock()
+        self.write_lock = threading.Lock()
+        self.latest_sensors = {}
+        self.current_scan_data = []
         self.connected = False
         self.emergency_until = 0.0
         self.last_valid_packet_time = time.time()
@@ -77,6 +79,8 @@ class NeatoDriver(Node):
         self.create_timer(0.2, self.main_loop)
         self.lidar_thread = threading.Thread(target=self.lidar_loop, daemon=True)
         self.lidar_thread.start()
+        self.reader_thread = threading.Thread(target=self.read_serial_loop, daemon=True)
+        self.reader_thread.start()
 
         self.get_logger().info(f'Neato Driver avviato su {self.serial_port} @ {self.baud_rate}')
 
@@ -95,7 +99,6 @@ class NeatoDriver(Node):
             
             self.connected = True
             self.get_logger().info('Connessione seriale stabilita.')
-            self.last_valid_packet_time = time.time()
             return True
         except serial.SerialException as e:
             self.connected = False
@@ -105,7 +108,7 @@ class NeatoDriver(Node):
     def send_command(self, cmd):
         if not self.connected or not self.ser:
             return None
-        with self.serial_lock:
+        with self.write_lock:
             try:
                 self.ser.write(f"{cmd}\n".encode('utf-8'))
                 time.sleep(0.01)
@@ -157,112 +160,78 @@ class NeatoDriver(Node):
         self.connect_serial()
 
     def read_sensors(self):
-        if not self.connected: return
+        if not self.connected: 
+            return
+
+        # Invia richieste (la lettura avviene in read_serial_loop)
+        self.send_command("GetAnalogSensors")
+        self.send_command("GetDigitalSensors")
+        
+        # Usa i dati più recenti
+        sensors = self.latest_sensors
 
         try:
-            with self.serial_lock:
-                self.ser.reset_input_buffer()
-                self.ser.write(b"GetAnalogSensors\n")
-                
-                sensors = {}
-                start_time = time.time()
-                while (time.time() - start_time) < 0.5:
-                    raw_line = self.ser.readline()
-                    try:
-                        line = raw_line.decode('utf-8', errors='ignore').strip()
-                    except ValueError:
-                        continue
+            # Pubblica Batteria
+            if 'BatteryVoltageInmV' in sensors and 'BatteryLevel' in sensors:
+                msg = BatteryState()
+                msg.header.stamp = self.get_clock().now().to_msg()
+                msg.voltage = sensors['BatteryVoltageInmV'] / 1000.0
+                msg.percentage = sensors['BatteryLevel'] / 100.0
+                msg.present = True
+                self.battery_pub.publish(msg)
 
-                    if not line or len(line) < 3: continue
+            # Safety Reflex
+            drop_l = sensors.get('DropSensorLeft', 0)
+            drop_r = sensors.get('DropSensorRight', 0)
+            mag_l = sensors.get('MagSensorLeft', 0)
+            mag_r = sensors.get('MagSensorRight', 0)
 
-                    parts = line.split(',')
-                    if len(parts) >= 2:
-                        try:
-                            sensors[parts[0]] = float(parts[1])
-                            self.last_valid_packet_time = time.time()
-                        except ValueError: pass
-                    
-                    if self.ser.in_waiting == 0: break
+            if (drop_l > 40 or drop_r > 40 or mag_l > 0 or mag_r > 0):
+                self.trigger_safety_reflex()
+            
+            # --- Logica Bumper ---
+            l_side = int(sensors.get('SNSR_LSIDEBIT', 0))
+            r_side = int(sensors.get('SNSR_RSIDEBIT', 0))
+            l_front = int(sensors.get('SNSR_LFRONTBIT', 0))
+            r_front = int(sensors.get('SNSR_RFRONTBIT', 0))
+            
+            bumper_msg = ""
+            hazards = []
+            
+            if l_front and r_front:
+                bumper_msg = "CENTER"
+                hazards = [(0.32, 0.0, 0.0), (0.32, 0.05, 0.0), (0.32, -0.05, 0.0)]
+            elif l_front:
+                bumper_msg = "FRONT_LEFT"
+                hazards = [(0.28, 0.12, 0.0), (0.25, 0.15, 0.0)]
+            elif r_front:
+                bumper_msg = "FRONT_RIGHT"
+                hazards = [(0.28, -0.12, 0.0), (0.25, -0.15, 0.0)]
+            elif l_side:
+                bumper_msg = "LEFT"
+                hazards = [(0.10, 0.18, 0.0), (0.0, 0.18, 0.0)]
+            elif r_side:
+                bumper_msg = "RIGHT"
+                hazards = [(0.10, -0.18, 0.0), (0.0, -0.18, 0.0)]
+            
+            if bumper_msg:
+                self.bumper_pub.publish(String(data=bumper_msg))
+                self.publish_hazard_cloud(hazards)
 
-                # --- Lettura Sensori Digitali (Bumper, Button) ---
-                self.ser.write(b"GetDigitalSensors\n")
-                start_time = time.time()
-                while (time.time() - start_time) < 0.5:
-                    raw_line = self.ser.readline()
-                    try:
-                        line = raw_line.decode('utf-8', errors='ignore').strip()
-                    except ValueError: continue
+            # --- Logica Bottone (Debounce) ---
+            btn = int(sensors.get('BTN_START', 0))
+            if btn == 1 and self.last_button_state == 0:
+                self.button_pub.publish(Bool(data=True))
+            self.last_button_state = btn
 
-                    if not line or len(line) < 3: continue
-                    parts = line.split(',')
-                    if len(parts) >= 2:
-                        try:
-                            sensors[parts[0]] = float(parts[1])
-                        except ValueError: pass
-                    if self.ser.in_waiting == 0: break
-
-                # Pubblica Batteria
-                if 'BatteryVoltageInmV' in sensors and 'BatteryLevel' in sensors:
-                    msg = BatteryState()
-                    msg.header.stamp = self.get_clock().now().to_msg()
-                    msg.voltage = sensors['BatteryVoltageInmV'] / 1000.0
-                    msg.percentage = sensors['BatteryLevel'] / 100.0
-                    msg.present = True
-                    self.battery_pub.publish(msg)
-
-                # Safety Reflex
-                drop_l = sensors.get('DropSensorLeft', 0)
-                drop_r = sensors.get('DropSensorRight', 0)
-                mag_l = sensors.get('MagSensorLeft', 0)
-                mag_r = sensors.get('MagSensorRight', 0)
-
-                if (drop_l > 40 or drop_r > 40 or mag_l > 0 or mag_r > 0):
-                    self.trigger_safety_reflex()
-                
-                # --- Logica Bumper ---
-                l_side = int(sensors.get('SNSR_LSIDEBIT', 0))
-                r_side = int(sensors.get('SNSR_RSIDEBIT', 0))
-                l_front = int(sensors.get('SNSR_LFRONTBIT', 0))
-                r_front = int(sensors.get('SNSR_RFRONTBIT', 0))
-                
-                bumper_msg = ""
-                hazards = []
-                
-                if l_front and r_front:
-                    bumper_msg = "CENTER"
-                    hazards = [(0.32, 0.0, 0.0), (0.32, 0.05, 0.0), (0.32, -0.05, 0.0)]
-                elif l_front:
-                    bumper_msg = "FRONT_LEFT"
-                    hazards = [(0.28, 0.12, 0.0), (0.25, 0.15, 0.0)]
-                elif r_front:
-                    bumper_msg = "FRONT_RIGHT"
-                    hazards = [(0.28, -0.12, 0.0), (0.25, -0.15, 0.0)]
-                elif l_side:
-                    bumper_msg = "LEFT"
-                    hazards = [(0.10, 0.18, 0.0), (0.0, 0.18, 0.0)]
-                elif r_side:
-                    bumper_msg = "RIGHT"
-                    hazards = [(0.10, -0.18, 0.0), (0.0, -0.18, 0.0)]
-                
-                if bumper_msg:
-                    self.bumper_pub.publish(String(data=bumper_msg))
-                    self.publish_hazard_cloud(hazards)
-
-                # --- Logica Bottone (Debounce) ---
-                btn = int(sensors.get('BTN_START', 0))
-                if btn == 1 and self.last_button_state == 0:
-                    self.button_pub.publish(Bool(data=True))
-                self.last_button_state = btn
-
-                # Carpet Detection
-                brush_ma = sensors.get('BrushMotorInmA', sensors.get('BrushCurrent', 0))
-                floor_msg = String()
-                floor_msg.data = "carpet" if brush_ma > self.carpet_threshold else "hard"
-                self.floor_pub.publish(floor_msg)
-
+            # Carpet Detection
+            brush_ma = sensors.get('BrushMotorInmA', sensors.get('BrushCurrent', 0))
+            floor_msg = String()
+            floor_msg.data = "carpet" if brush_ma > self.carpet_threshold else "hard"
+            self.floor_pub.publish(floor_msg)
+            
         except Exception as e:
             self.get_logger().warn(f'Errore lettura sensori: {e}')
-            self.connected = False
 
     def trigger_safety_reflex(self):
         now = time.time()
@@ -270,7 +239,7 @@ class NeatoDriver(Node):
 
         self.get_logger().warn("SAFETY REFLEX! Drop/Mag detected.")
         self.emergency_until = now + 2.0
-        with self.serial_lock:
+        with self.write_lock:
             self.ser.write(b"SetMotor LWheelDist -100 RWheelDist -100 Speed 100\n")
         self.publish_hazard_cloud()
         
@@ -309,44 +278,64 @@ class NeatoDriver(Node):
         msg.data = b''.join(points)
         self.hazard_pub.publish(msg)
 
+    def read_serial_loop(self):
+        """Thread dedicato alla lettura continua della seriale."""
+        while rclpy.ok():
+            if not self.connected or self.ser is None:
+                time.sleep(0.1)
+                continue
+            
+            try:
+                line = self.ser.readline()
+                if not line: continue
+                
+                line = line.decode('utf-8', errors='ignore').strip()
+                if not line: continue
+
+                # 1. LIDAR Header Detection
+                if line.startswith("AngleInDegree"):
+                    self.current_scan_data = []
+                    continue
+
+                parts = line.split(',')
+                
+                # 2. LIDAR Data (4 colonne: Angle, Dist, Intensity, Error)
+                if len(parts) == 4 and parts[0].isdigit():
+                    try:
+                        angle = int(parts[0])
+                        dist_mm = int(parts[1])
+                        intensity = int(parts[2])
+                        error = int(parts[3])
+                        
+                        # Accumula
+                        self.current_scan_data.append((angle, dist_mm / 1000.0, intensity))
+                        
+                        # Fine pacchetto (circa 360 gradi)
+                        if angle >= 359:
+                            self.publish_scan(self.current_scan_data)
+                            self.current_scan_data = []
+                            self.last_valid_packet_time = time.time()
+                    except ValueError:
+                        pass
+                
+                # 3. Sensor Data (CSV: Name,Value)
+                elif len(parts) == 2:
+                    try:
+                        name = parts[0]
+                        val = float(parts[1])
+                        self.latest_sensors[name] = val
+                        self.last_valid_packet_time = time.time()
+                    except ValueError:
+                        pass
+                        
+            except Exception as e:
+                time.sleep(0.1)
+
     def lidar_loop(self):
         while rclpy.ok():
-            if not self.connected:
-                time.sleep(1.0)
-                continue
-            try:
-                scan_data = []
-                with self.serial_lock:
-                    self.ser.write(b"GetLDSScan\n")
-                    start_time = time.time()
-                    lines_read = 0
-                    while lines_read < 365 and (time.time() - start_time) < 1.0:
-                        try:
-                            line = self.ser.readline().decode('utf-8', errors='ignore').strip()
-                        except: continue
-                        
-                        if not line or line.startswith('Angle') or line.startswith('#'): continue
-                        
-                        parts = line.split(',')
-                        if len(parts) >= 4:
-                            try:
-                                angle = int(parts[0])
-                                dist_mm = int(parts[1])
-                                intensity = int(parts[2])
-                                error = int(parts[3])
-                                if error == 0:
-                                    scan_data.append((angle, dist_mm / 1000.0, intensity))
-                                else:
-                                    scan_data.append((angle, float('inf'), 0))
-                                lines_read += 1
-                                self.last_valid_packet_time = time.time()
-                            except ValueError: pass
-                
-                if len(scan_data) > 0:
-                    self.publish_scan(scan_data)
-                time.sleep(0.15)
-            except Exception:
-                time.sleep(1.0)
+            if self.connected:
+                self.send_command("GetLDSScan")
+            time.sleep(0.2)
 
     def publish_scan(self, data):
         msg = LaserScan()
