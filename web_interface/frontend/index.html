@@ -19,6 +19,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary">
         <div class="container-fluid">
             <a class="navbar-brand" href="#"><i class="fas fa-robot"></i> OpenNeato</a>
+            <button class="btn btn-sm btn-outline-info me-auto ms-3" data-bs-toggle="modal" data-bs-target="#logModal"><i class="fas fa-terminal"></i> Show Logs</button>
             <span class="navbar-text">
                 ROS: <span id="ros-status" class="badge bg-danger">Disconnected</span>
             </span>
@@ -89,6 +90,22 @@
                 <div class="modal-footer border-secondary">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Modal -->
+    <div class="modal fade" id="logModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title"><i class="fas fa-terminal"></i> System Logs</h5>
+                    <button type="button" class="btn btn-sm btn-outline-light ms-auto me-2" id="btn-refresh-logs"><i class="fas fa-sync"></i> Refresh</button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div id="log-console" class="p-3" style="background-color: #000; color: #0f0; font-family: 'Courier New', monospace; height: 400px; overflow-y: auto; font-size: 0.9rem; white-space: pre-wrap;">Waiting for logs...</div>
                 </div>
             </div>
         </div>

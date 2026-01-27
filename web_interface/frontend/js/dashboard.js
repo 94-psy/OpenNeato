@@ -116,6 +116,36 @@ document.getElementById('btn-stop').onclick = async () => {
     await fetch('/api/clean/stop', { method: 'POST' });
 };
 
+// --- Logs Logic ---
+let logInterval = null;
+
+async function fetchLogs() {
+    try {
+        const res = await fetch('/api/logs');
+        const data = await res.json();
+        const consoleDiv = document.getElementById('log-console');
+        if (data.logs && consoleDiv) {
+            consoleDiv.innerText = data.logs.join('\n');
+            // Auto-scroll to bottom
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+    } catch(e) {
+        console.error("Log Fetch Error", e);
+    }
+}
+
+const logModal = document.getElementById('logModal');
+if (logModal) {
+    logModal.addEventListener('shown.bs.modal', () => {
+        fetchLogs();
+        logInterval = setInterval(fetchLogs, 3000);
+    });
+    logModal.addEventListener('hidden.bs.modal', () => {
+        if (logInterval) clearInterval(logInterval);
+    });
+}
+document.getElementById('btn-refresh-logs')?.addEventListener('click', fetchLogs);
+
 // Polling stato ogni 2 secondi
 setInterval(fetchStatus, 2000);
 loadZones();

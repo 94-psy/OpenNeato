@@ -1,5 +1,8 @@
 import json
 import os
+import sys
+import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import List
 from uuid import UUID
@@ -26,12 +29,56 @@ app.add_middleware(
 # Global State
 ros_client: RosClient = None
 CONFIG_FILE = Path("config.json")
+LOG_FILE = Path("robot.log")
+
+class StreamToLogger:
+    """
+    Reindirizza lo stream (stdout/stderr) al logger specificato.
+    Gestisce il buffering per garantire che le righe siano loggate complete.
+    """
+    def __init__(self, logger, level):
+        self.logger = logger
+        self.level = level
+        self.buffer = ""
+
+    def write(self, buf):
+        self.buffer += buf
+        while '\n' in self.buffer:
+            line, self.buffer = self.buffer.split('\n', 1)
+            self.logger.log(self.level, line)
+
+    def flush(self):
+        if self.buffer:
+            self.logger.log(self.level, self.buffer)
+            self.buffer = ""
 
 # --- Lifecycle Events ---
 
 @app.on_event("startup")
 async def startup_event():
     global ros_client
+    
+    # 1. Configurazione Logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    
+    # Rotating File Handler (Max 1MB, 3 Backup)
+    file_handler = RotatingFileHandler(LOG_FILE, maxBytes=1*1024*1024, backupCount=3)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    
+    # Console Handler (scrive su stdout originale per evitare loop con la redirezione)
+    if not isinstance(sys.stdout, StreamToLogger):
+        original_stdout = sys.stdout
+        console_handler = logging.StreamHandler(original_stdout)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+        
+        # 3. Integrazione ROS: Cattura stdout/stderr (inclusi log ROS)
+        sys.stdout = StreamToLogger(logger, logging.INFO)
+        sys.stderr = StreamToLogger(logger, logging.ERROR)
+
     # Inizializza ROS 2 context
     rclpy.init()
     # Crea e avvia il nodo client
@@ -52,6 +99,18 @@ async def shutdown_event():
     rclpy.shutdown()
 
 # --- API Endpoints ---
+
+@app.get("/api/logs")
+async def get_logs():
+    """Restituisce le ultime 100 righe del file di log."""
+    if not LOG_FILE.exists():
+        return {"logs": []}
+    try:
+        with open(LOG_FILE, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+            return {"logs": [line.strip() for line in lines[-100:]]}
+    except Exception as e:
+        return {"logs": [f"Errore lettura log: {str(e)}"]}
 
 @app.get("/api/status", response_model=RobotStatus)
 async def get_status():
