@@ -47,8 +47,12 @@ check_self_update() {
         REMOTE_HASH=$(git rev-parse origin/main)
         
         if [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
-            if (whiptail --title "Self Update" --yesno "Trovato aggiornamento dell'installer.\nVuoi aggiornare e riavviare?" 10 60); then
-                git pull
+            if (whiptail --title "Self Update" --yesno "Trovato aggiornamento dell'installer.\nVuoi resettare le modifiche locali e aggiornare?" 10 60); then
+                echo "Resetta modifiche locali..."
+                git reset --hard HEAD
+                echo "Scarica aggiornamenti..."
+                git pull origin main
+                echo "Riavvio installer..."
                 exec "$0" "$@"
             fi
         fi
