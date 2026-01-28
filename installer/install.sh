@@ -1,5 +1,27 @@
 #!/bin/bash
 
+# --- Whiptail Theme (Classic Blue/Gray) ---
+export NEWT_COLORS='
+root=,blue
+window=,lightgray
+border=,lightgray
+shadow=,black
+title=blue,lightgray
+button=black,cyan
+actbutton=white,red
+checkbox=black,lightgray
+actcheckbox=black,cyan
+entry=black,lightgray
+label=black,lightgray
+listbox=black,lightgray
+actlistbox=black,cyan
+textbox=black,lightgray
+acttextbox=black,cyan
+helpline=white,blue
+roottext=white,blue
+empty=black,lightgray
+'
+
 # OpenNeato Installer for Ubuntu 24.04 (Radxa Zero 3W)
 REPO_URL="https://github.com/94-psy/OpenNeato.git"
 INSTALL_DIR="/opt/openneato"
@@ -111,7 +133,14 @@ check_system_requirements() {
 setup_repositories() {
     whiptail --title "System Update" --infobox "Configuring apt repositories..." 8 78
     sudo apt install -y software-properties-common curl
-    sudo add-apt-repository universe
+    
+    # Universe Repository (Required)
+    if (whiptail --title "Configure Repositories" --yesno "The 'universe' repository is required for ROS 2 dependencies.\n\nEnable it now?" 10 60); then
+        sudo add-apt-repository -y universe
+    else
+        whiptail --title "Abort" --msgbox "Installation cannot proceed without the universe repository." 8 60
+        exit 1
+    fi
     
     ROS2_LIST="/etc/apt/sources.list.d/ros2.list"
     DO_UPDATE=1
