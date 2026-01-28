@@ -52,6 +52,10 @@ local_costmap:
       # Neato D7 Footprint (D-Shape)
       footprint: "[ [0.15, 0.16], [0.15, -0.16], [-0.18, -0.16], [-0.22, 0.0], [-0.18, 0.16] ]"
       plugins: ["voxel_layer", "inflation_layer"]
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.55
 
 global_costmap:
   global_costmap:
@@ -65,3 +69,7 @@ global_costmap:
       # Neato D7 Footprint (D-Shape)
       footprint: "[ [0.15, 0.16], [0.15, -0.16], [-0.18, -0.16], [-0.22, 0.0], [-0.18, 0.16] ]"
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.55

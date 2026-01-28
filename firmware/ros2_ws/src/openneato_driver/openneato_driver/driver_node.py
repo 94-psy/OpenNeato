@@ -94,7 +94,7 @@ class NeatoDriver(Node):
                 self.baud_rate, 
                 timeout=0.1
             )
-            time.sleep(1.0)
+            time.sleep(2.0)
             self.ser.reset_input_buffer()
             self.send_command("TestMode On")
             self.send_command("SetLDSRotation On")
@@ -168,6 +168,7 @@ class NeatoDriver(Node):
 
         # Invia richieste (la lettura avviene in read_serial_loop)
         self.send_command("GetAnalogSensors")
+        time.sleep(0.15)
         self.send_command("GetDigitalSensors")
         
         # Usa i dati più recenti
@@ -338,7 +339,7 @@ class NeatoDriver(Node):
         while rclpy.ok():
             if self.connected:
                 self.send_command("GetLDSScan")
-            time.sleep(1.0)
+            time.sleep(0.5)
 
     def publish_scan(self, data):
         msg = LaserScan()
