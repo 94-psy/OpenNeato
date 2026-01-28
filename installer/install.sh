@@ -345,6 +345,9 @@ EOF
 }
 
 do_install() {
+    # Fix permissions of the source directory to allow git operations by user
+    chown -R "$REAL_USER":"$REAL_GROUP" "$PWD"
+
     check_system_requirements
     setup_repositories
     install_dependencies
