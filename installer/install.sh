@@ -154,17 +154,15 @@ install_dependencies() {
         "fake-hwclock"
     )
 
-    for pkg in "${PACKAGES[@]}"; do
-        whiptail --title "Installing Dependencies" --infobox "Installing $pkg..." 8 78
-        apt install -y "$pkg"
-        EXIT_CODE=$?
-        
-        if [ $EXIT_CODE -ne 0 ]; then
-            if (whiptail --title "Installation Error" --yesno "Package '$pkg' failed to install (Exit Code: $EXIT_CODE).\n\nAbort installation?" 10 60); then
-                exit 1
-            fi
+    whiptail --title "Dependencies" --infobox "Installing all system dependencies... This may take a moment." 8 78
+    apt install -y "${PACKAGES[@]}"
+    EXIT_CODE=$?
+    
+    if [ $EXIT_CODE -ne 0 ]; then
+        if (whiptail --title "Installation Error" --yesno "Dependency installation failed (Exit Code: $EXIT_CODE).\n\nAbort installation?" 10 60); then
+            exit 1
         fi
-    done
+    fi
     
     # Time Persistence (Fake HW Clock)
     if command -v fake-hwclock &> /dev/null; then
