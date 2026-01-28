@@ -296,11 +296,9 @@ build_firmware() {
 configure_services() {
     whiptail --title "System Config" --infobox "Configuring services and udev rules..." 8 78
     
-    # Udev
-    if [ -f "$PWD/config/udev/99-neato.rules" ]; then
-        cp "$PWD/config/udev/99-neato.rules" /etc/udev/rules.d/
-        udevadm control --reload-rules && udevadm trigger
-    fi
+    # Udev - Generazione diretta per supportare sia ACM che USB
+    echo 'KERNEL=="ttyACM*|ttyUSB*", SYMLINK+="ttyNeato"' > /etc/udev/rules.d/99-neato.rules
+    udevadm control --reload-rules && udevadm trigger
 
     # Systemd
     # Generate services dynamically to inject ROS_DISTRO

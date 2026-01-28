@@ -335,7 +335,7 @@ class NeatoDriver(Node):
         while rclpy.ok():
             if self.connected:
                 self.send_command("GetLDSScan")
-            time.sleep(0.2)
+            time.sleep(1.0)
 
     def publish_scan(self, data):
         msg = LaserScan()
