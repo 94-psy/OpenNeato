@@ -99,6 +99,7 @@ class NeatoDriver(Node):
             
             self.connected = True
             self.get_logger().info('Connessione seriale stabilita.')
+            self.last_valid_packet_time = time.time()
             return True
         except serial.SerialException as e:
             self.connected = False
