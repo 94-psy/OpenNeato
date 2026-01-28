@@ -134,7 +134,7 @@ class NeatoDriver(Node):
 
     def main_loop(self):
         # Watchdog
-        if self.connected and (time.time() - self.last_valid_packet_time > 1.5):
+        if self.connected and (time.time() - self.last_valid_packet_time > 4.0):
             self.get_logger().error("WATCHDOG: Serial Communication Lost")
             self.handle_serial_failure()
             return
