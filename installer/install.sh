@@ -343,7 +343,7 @@ After=network.target
 User=$REAL_USER
 Group=$REAL_GROUP
 # Utilizziamo bash -c per fare il source dell'ambiente
-ExecStart=/bin/bash -c 'source /opt/ros/${ROS_DISTRO}/setup.bash && source /opt/openneato/firmware/ros2_ws/install/setup.bash && exec ros2 launch openneato_nav navigation_launch.py >> /opt/openneato/web_interface/backend/robot.log 2>&1'
+ExecStart=/bin/bash -c 'source /opt/ros/kilted/setup.bash && source /opt/openneato/firmware/ros2_ws/install/setup.bash && exec ros2 launch openneato_nav navigation_launch.py >> /opt/openneato/web_interface/backend/robot.log 2>&1'
 Restart=always
 RestartSec=10
 
