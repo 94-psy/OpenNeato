@@ -53,6 +53,7 @@ check_self_update() {
                 echo "Scarica aggiornamenti..."
                 git pull origin main
                 echo "Riavvio installer..."
+                chmod +x "$0"
                 exec "$0" "$@"
             fi
         fi
