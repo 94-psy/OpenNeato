@@ -322,14 +322,21 @@ class NeatoDriver(Node):
                     except ValueError:
                         pass
                 
-                # 3. Sensor Data (CSV: Name,Value)
-                elif len(parts) == 2:
+                # 3. Sensor Data (CSV: Name,Value OR Name,Unit,Value)
+                elif len(parts) >= 2 and not parts[0].isdigit():
                     try:
                         name = parts[0]
-                        val = float(parts[1])
+                        # Se ci sono 3+ parti (Nome, Unit, Valore, ...), il valore è l'indice 2
+                        # Se ci sono 2 parti (Nome, Valore), il valore è l'indice 1
+                        val_index = 2 if len(parts) >= 3 and not parts[1].replace('.','',1).isdigit() else 1
+                        
+                        # Rimuovi caratteri non numerici extra se necessario
+                        val_str = parts[val_index].replace(';', '')
+                        val = float(val_str)
+                        
                         self.latest_sensors[name] = val
                         self.last_valid_packet_time = time.time()
-                    except ValueError:
+                    except (ValueError, IndexError):
                         pass
                         
             except Exception as e:
