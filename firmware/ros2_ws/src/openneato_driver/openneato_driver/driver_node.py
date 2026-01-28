@@ -76,7 +76,7 @@ class NeatoDriver(Node):
         )
 
         # --- Timers & Threads ---
-        self.create_timer(0.2, self.main_loop)
+        self.create_timer(1.0, self.main_loop)
         self.lidar_thread = threading.Thread(target=self.lidar_loop, daemon=True)
         self.lidar_thread.start()
         self.reader_thread = threading.Thread(target=self.read_serial_loop, daemon=True)
@@ -94,6 +94,8 @@ class NeatoDriver(Node):
                 self.baud_rate, 
                 timeout=0.1
             )
+            time.sleep(1.0)
+            self.ser.reset_input_buffer()
             self.send_command("TestMode On")
             self.send_command("SetLDSRotation On")
             
