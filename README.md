@@ -4,6 +4,16 @@
 ![ROS 2](https://img.shields.io/badge/ROS_2-22314E.svg)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)
 
+> [!WARNING]
+> **PROJECT STATUS: EXPERIMENTAL / WORK IN PROGRESS**
+> 
+> This project is currently in active development and testing. 
+> * **Stability:** The serial connection with the robot firmware is still being optimized to prevent buffer overflows and disconnects.
+> * **Thermal Issues:** The Radxa Zero 3W tends to overheat (thermal throttling at 85°C) inside the enclosed chassis. Active cooling solutions are being investigated.
+> * **Software:** The ROS 2 stack is functional but requires manual tuning.
+> 
+> **Proceed with caution.** This is not yet a plug-and-play solution. Do not leave the robot unattended during operation.
+
 **OpenNeato** is an open-source project designed to breathe new life into Neato robotic vacuums (specifically tested on the Neato D7) by replacing the proprietary logic board functions with a modern Single Board Computer (SBC) running **ROS 2**.
 
 This project transforms your old vacuum into a smart, fully autonomous robot capable of advanced mapping, navigation, and web-based control, leveraging the power of the `nav2` stack and a custom Python-based driver.
