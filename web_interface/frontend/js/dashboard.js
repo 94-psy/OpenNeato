@@ -127,7 +127,7 @@ async function fetchLogs() {
         if (data.logs && consoleDiv) {
             consoleDiv.innerText = data.logs.join('\n');
             // Auto-scroll to bottom
-            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            // consoleDiv.scrollTop = consoleDiv.scrollHeight;
         }
     } catch(e) {
         console.error("Log Fetch Error", e);
@@ -138,7 +138,7 @@ const logModal = document.getElementById('logModal');
 if (logModal) {
     logModal.addEventListener('shown.bs.modal', () => {
         fetchLogs();
-        logInterval = setInterval(fetchLogs, 3000);
+        // logInterval = setInterval(fetchLogs, 3000);
     });
     logModal.addEventListener('hidden.bs.modal', () => {
         if (logInterval) clearInterval(logInterval);

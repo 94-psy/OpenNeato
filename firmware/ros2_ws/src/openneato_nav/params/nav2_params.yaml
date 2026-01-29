@@ -1,5 +1,3 @@
-Sostituisci interamente il contenuto di 'firmware/ros2_ws/src/openneato_nav/params/nav2_params.yaml' con questa configurazione corretta che include i plugin mancanti:
-
 amcl:
   ros__parameters:
     use_sim_time: False

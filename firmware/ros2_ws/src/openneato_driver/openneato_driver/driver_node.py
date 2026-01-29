@@ -89,21 +89,18 @@ class NeatoDriver(Node):
             if self.ser and self.ser.is_open:
                 self.ser.close()
             
-            self.ser = serial.Serial(
-                self.serial_port, 
-                self.baud_rate, 
-                timeout=0.1
-            )
+            self.ser = serial.Serial(self.serial_port, self.baud_rate, timeout=0.1)
             time.sleep(2.0)
             self.ser.reset_input_buffer()
             self.send_command("TestMode On")
+            time.sleep(0.1)
             self.send_command("SetLDSRotation On")
             
             self.connected = True
-            self.get_logger().info('Connessione seriale stabilita.')
             self.last_valid_packet_time = time.time()
+            self.get_logger().info('Connessione seriale stabilita.')
             return True
-        except serial.SerialException as e:
+        except (serial.SerialException, OSError) as e:
             self.connected = False
             self.get_logger().error(f'Errore connessione seriale: {e}')
             return False
