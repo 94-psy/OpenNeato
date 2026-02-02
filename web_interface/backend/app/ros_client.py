@@ -71,17 +71,20 @@ class RosClient(Node):
         msg.angular.z = float(angular)
         self.cmd_vel_pub.publish(msg)
 
-    def start_cleaning(self, zone_ids: list, suction_power: int = 80):
-        """
-        Invia il comando di pulizia per le zone specificate al sistema ROS.
-        """
-        self.get_logger().info(f"Requesting cleaning for zones: {zone_ids}, Power: {suction_power}%")
+    def start_cleaning(self, type: str, zone_ids: list, suction_power: int = 80):
+        self.get_logger().info(f"Requesting {type}. Zones: {zone_ids}, Power: {suction_power}%")
         self.is_cleaning = True
-        self.current_state = f"CLEANING (Zones: {len(zone_ids)})"
+        self.current_state = "CLEANING_FULL" if type == "full_cleaning" else f"CLEANING_ZONES ({len(zone_ids)})"
 
         try:
-            # Creazione del payload JSON
-            payload = json.dumps(zone_ids)
+            # Creazione payload JSON più strutturato
+            payload_data = {
+                "type": type,
+                "zones": zone_ids,
+                "power": suction_power
+            }
+            payload = json.dumps(payload_data)
+            
             msg = String()
             msg.data = payload
             

@@ -105,10 +105,21 @@ document.getElementById('btn-start').onclick = async () => {
     const selected = [];
     document.querySelectorAll('.zone-checkbox:checked').forEach(cb => selected.push(cb.value));
     
+    const mode = selected.length > 0 ? "zone_cleaning" : "full_cleaning";
+    const confirmMsg = mode === "zone_cleaning" 
+        ? `Clean ${selected.length} selected zones?` 
+        : "No zones selected. Start FULL HOUSE cleaning (Exploration Mode)?";
+
+    if(!confirm(confirmMsg)) return;
+    
     await fetch('/api/clean/start', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ zone_ids: selected, suction_power: 80 })
+        body: JSON.stringify({ 
+            type: mode, // 'full_cleaning' o 'zone_cleaning'
+            zone_ids: selected, 
+            suction_power: 80 
+        })
     });
 };
 

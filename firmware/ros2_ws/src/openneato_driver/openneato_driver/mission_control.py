@@ -45,6 +45,7 @@ class MissionControl(Node):
         self.is_mission_active = False
         self.current_waypoints = []
         self.current_waypoint_index = 0
+        self.home_pose = None
         
         # --- Timers ---
         # Timer persistenza (10s)
@@ -64,35 +65,47 @@ class MissionControl(Node):
     def mission_start_callback(self, msg):
         self.get_logger().info(f"Received mission request: {msg.data}")
         try:
-            zone_ids = json.loads(msg.data)
-            waypoints = []
+            data = json.loads(msg.data)
+            mission_type = data.get("type", "zone_cleaning")
             
-            for zone_id in zone_ids:
-                # Recupera i waypoint per la zona specifica (già calcolati a zig-zag)
-                zone_waypoints = self.load_zone_coordinates(zone_id)
-                
-                if zone_waypoints:
-                    waypoints.extend(zone_waypoints)
-                    self.get_logger().info(f"Added {len(zone_waypoints)} waypoints for zone {zone_id}")
+            # Salva la posizione corrente come HOME prima di partire
+            # (Nota: qui servirebbe leggere /amcl_pose o /odom, per ora assumiamo 0,0 o l'ultima nota)
+            self.get_logger().info("Mission Started. Recording HOME position.")
+            # TODO: Sottoscriversi a /amcl_pose per salvare la vera home
             
-            if waypoints:
-                self.current_waypoints = waypoints
-                self.current_waypoint_index = 0
-                self.is_mission_active = True
-                
-                # --- AZIONE CRITICA: ACCENDI ASPIRAPOLVERE ---
-                self.cleaning_pub.publish(Bool(data=True))
-                self.get_logger().info("Cleaning Motors ACTIVATED")
-                
-                self.get_logger().info(f"Starting mission execution with {len(waypoints)} total waypoints")
-                self.navigator.followWaypoints(self.current_waypoints)
+            self.is_mission_active = True
+            self.cleaning_pub.publish(Bool(data=True)) # Accendi aspirazione
+
+            if mission_type == "full_cleaning":
+                self.start_full_exploration()
             else:
-                self.get_logger().warn("Mission request resulted in no valid waypoints")
+                self.start_zone_cleaning(data.get("zones", []))
                 
         except json.JSONDecodeError:
             self.get_logger().error("Failed to decode JSON mission request")
-        except Exception as e:
-            self.get_logger().error(f"Error processing mission: {e}")
+
+    def start_zone_cleaning(self, zone_ids):
+        waypoints = []
+        for zone_id in zone_ids:
+            z_wp = self.load_zone_coordinates(zone_id)
+            if z_wp: waypoints.extend(z_wp)
+        
+        if waypoints:
+            self.current_waypoints = waypoints
+            self.navigator.followWaypoints(self.current_waypoints)
+        else:
+            self.get_logger().warn("No waypoints generated for zones.")
+            self.abort_and_dock()
+
+    def start_full_exploration(self):
+        self.get_logger().info("Starting FULL HOUSE cleaning (Exploration).")
+        # QUI andrà integrato un nodo di esplorazione (es. explore_lite)
+        # Per ora, non avendo il pacchetto, possiamo solo loggare.
+        # In futuro: self.navigator.start_exploration()
+        self.get_logger().warn("Exploration logic not installed yet. Staying idle.")
+        # Temporaneo: spegni subito per evitare blocchi
+        self.is_mission_active = False
+        self.cleaning_pub.publish(Bool(data=False))
 
     def load_zone_coordinates(self, zone_id):
         """Legge il config, estrae i vertici e usa il planner per generare il percorso."""

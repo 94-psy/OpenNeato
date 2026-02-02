@@ -131,7 +131,7 @@ async def get_status():
 async def start_cleaning(request: CleaningRequest):
     if not ros_client:
         raise HTTPException(status_code=503, detail="ROS Client not initialized")
-    ros_client.start_cleaning(request.zone_ids, request.suction_power)
+    ros_client.start_cleaning(request.type, request.zone_ids, request.suction_power)
     return {"status": "Cleaning started"}
 
 @app.post("/api/clean/stop")

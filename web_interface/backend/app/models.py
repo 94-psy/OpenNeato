@@ -19,7 +19,8 @@ class Zone(BaseModel):
     coordinates: List[Point]
 
 class CleaningRequest(BaseModel):
-    zone_ids: List[str]
+    type: str = "zone_cleaning" # 'full_cleaning' o 'zone_cleaning'
+    zone_ids: List[str] = []
     suction_power: int = Field(..., ge=0, le=100, description="Suction power percentage 0-100")
 
 class RobotStatus(BaseModel):
