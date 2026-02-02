@@ -342,8 +342,12 @@ After=network.target
 [Service]
 User=$REAL_USER
 Group=$REAL_GROUP
-# Utilizziamo bash -c per fare il source dell'ambiente
-ExecStart=/bin/bash -c 'source /opt/ros/kilted/setup.bash && source /opt/openneato/firmware/ros2_ws/install/setup.bash && exec ros2 launch openneato_nav navigation_launch.py >> /opt/openneato/web_interface/backend/robot.log 2>&1'
+# Setup dinamico:
+# 1. Carica ambiente ROS
+# 2. Legge la modalità (Navigation/Mapping) da file conf (o usa default)
+# 3. Logga la modalità di avvio
+# 4. Lancia il tutto reindirizzando output su robot.log per la WebUI
+ExecStart=/bin/bash -c 'source /opt/ros/${ROS_DISTRO}/setup.bash && source /opt/openneato/firmware/ros2_ws/install/setup.bash && MODE=\$(cat /opt/openneato/config/mode.conf 2>/dev/null || echo slam:=False) && echo "Starting OpenNeato with args: \$MODE" >> /opt/openneato/web_interface/backend/robot.log && exec ros2 launch openneato_nav navigation_launch.py \$MODE >> /opt/openneato/web_interface/backend/robot.log 2>&1'
 Restart=always
 RestartSec=10
 
@@ -376,6 +380,24 @@ EOF
     systemctl restart openneato-web.service
 }
 
+setup_permissions() {
+    whiptail --title "Permissions" --infobox "Configuring sudoers for web interface..." 8 78
+    
+    # Crea un file sudoers dedicato per openneato
+    SUDO_FILE="/etc/sudoers.d/openneato"
+    
+    # Comandi permessi senza password
+    cat <<EOF > "$SUDO_FILE"
+$REAL_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart openneato-core.service
+$REAL_USER ALL=(root) NOPASSWD: /usr/bin/systemctl stop openneato-core.service
+$REAL_USER ALL=(root) NOPASSWD: /usr/bin/systemctl start openneato-core.service
+$REAL_USER ALL=(root) NOPASSWD: /usr/sbin/shutdown
+$REAL_USER ALL=(root) NOPASSWD: /usr/sbin/reboot
+EOF
+
+    chmod 0440 "$SUDO_FILE"
+}
+
 do_install() {
     # Fix permissions of the source directory to allow git operations by user
     chown -R "$REAL_USER":"$REAL_GROUP" "$PWD"
@@ -388,6 +410,7 @@ do_install() {
     setup_python_env
     build_firmware
     configure_services
+    setup_permissions
 
     # Finale
     IP_ADDR=$(hostname -I | awk '{print $1}')

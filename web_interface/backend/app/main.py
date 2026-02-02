@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import logging
+import subprocess
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import List
@@ -13,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.models import Zone, CleaningRequest, RobotStatus
+from app.models import Zone, CleaningRequest, RobotStatus, TeleopRequest
 from app.ros_client import RosClient
 
 app = FastAPI(title="OpenNeato Web Interface")
@@ -30,6 +31,10 @@ app.add_middleware(
 ros_client: RosClient = None
 CONFIG_FILE = Path("config.json")
 LOG_FILE = Path("robot.log")
+MODE_FILE = Path("/opt/openneato/config/mode.conf")
+# Assicurati che la cartella config esista all'avvio
+if not os.path.exists("/opt/openneato/config"):
+    os.makedirs("/opt/openneato/config", exist_ok=True)
 
 class StreamToLogger:
     """
@@ -185,6 +190,80 @@ async def delete_zone(zone_id: UUID):
         json.dump(zones_data, f, indent=2)
         
     return {"status": "deleted", "id": str(zone_id)}
+
+@app.post("/api/teleop")
+async def teleop_control(request: TeleopRequest):
+    if not ros_client:
+        raise HTTPException(status_code=503, detail="ROS Client not initialized")
+    
+    # HARD LIMIT di sicurezza: 0.15 m/s
+    safe_linear = max(-0.15, min(request.linear_x, 0.15))
+    safe_angular = max(-1.5, min(request.angular_z, 1.5))
+    
+    ros_client.send_velocity(safe_linear, safe_angular)
+    return {"status": "ok"}
+
+@app.post("/api/map/save")
+async def save_map():
+    """
+    Esegue il map_saver di ROS 2 per salvare la mappa corrente.
+    """
+    try:
+        # Percorso dove salvare la mappa
+        map_path = "/opt/openneato/firmware/ros2_ws/src/openneato_nav/maps/map"
+        
+        # Comando ROS 2 Map Saver
+        cmd = f"ros2 run nav2_map_server map_saver_cli -f {map_path}"
+        
+        # Esecuzione (richiede che l'ambiente ROS sia caricato, potrebbe richiedere wrapper)
+        # Nota: Usiamo lo stesso environment del servizio
+        subprocess.Popen(cmd, shell=True, executable='/bin/bash')
+        
+        return {"status": "Map save requested"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/system/mode/{mode}")
+async def set_system_mode(mode: str):
+    """
+    Imposta la modalità (mapping o navigation) e riavvia il robot.
+    """
+    if mode not in ["mapping", "navigation"]:
+        raise HTTPException(status_code=400, detail="Invalid mode")
+    
+    # Scrivi il file di configurazione per il servizio
+    param = "slam:=True" if mode == "mapping" else "slam:=False"
+    try:
+        with open(MODE_FILE, "w") as f:
+            f.write(param)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to write mode: {e}")
+    
+    # Riavvia il servizio ROS (richiede sudoers configurato)
+    try:
+        subprocess.run(["sudo", "systemctl", "restart", "openneato-core.service"], check=True)
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to restart service: {e}")
+        
+    return {"status": "restarting", "mode": mode}
+
+@app.get("/api/system/mode")
+async def get_system_mode():
+    if not MODE_FILE.exists():
+        return {"mode": "navigation"} # Default
+    with open(MODE_FILE, "r") as f:
+        content = f.read().strip()
+        return {"mode": "mapping" if "slam:=True" in content else "navigation"}
+
+@app.post("/api/system/shutdown")
+async def system_shutdown():
+    subprocess.run(["sudo", "shutdown", "now"])
+    return {"status": "shutting_down"}
+
+@app.post("/api/system/reboot")
+async def system_reboot():
+    subprocess.run(["sudo", "reboot"])
+    return {"status": "rebooting"}
 
 # --- Static Files (Frontend) ---
 # Mount deve essere l'ultimo per non oscurare le API

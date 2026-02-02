@@ -64,6 +64,13 @@ class RosClient(Node):
         self.current_state = "STOPPED"
         self.get_logger().info("Emergency Stop Sent")
 
+    def send_velocity(self, linear: float, angular: float):
+        """Pubblica comandi di velocità su /cmd_vel."""
+        msg = Twist()
+        msg.linear.x = float(linear)
+        msg.angular.z = float(angular)
+        self.cmd_vel_pub.publish(msg)
+
     def start_cleaning(self, zone_ids: list, suction_power: int = 80):
         """
         Invia il comando di pulizia per le zone specificate al sistema ROS.

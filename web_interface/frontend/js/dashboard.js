@@ -149,3 +149,110 @@ document.getElementById('btn-refresh-logs')?.addEventListener('click', fetchLogs
 // Polling stato ogni 2 secondi
 setInterval(fetchStatus, 2000);
 loadZones();
+
+// --- Manual Control Logic ---
+
+async function sendVelocity(linear, angular) {
+    try {
+        await fetch('/api/teleop', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ linear_x: linear, angular_z: angular })
+        });
+    } catch(e) {
+        console.error("Teleop Error", e);
+    }
+}
+
+let moveInterval = null;
+
+window.startMove = (type, value) => {
+    if (moveInterval) clearInterval(moveInterval);
+    
+    // Invia comando immediato
+    if (type === 'linear') sendVelocity(value, 0.0);
+    if (type === 'angular') sendVelocity(0.0, value);
+
+    // Ripeti il comando ogni 200ms per sicurezza (heartbeat)
+    moveInterval = setInterval(() => {
+        if (type === 'linear') sendVelocity(value, 0.0);
+        if (type === 'angular') sendVelocity(0.0, value);
+    }, 200);
+};
+
+window.stopMove = () => {
+    if (moveInterval) clearInterval(moveInterval);
+    sendVelocity(0.0, 0.0); // Stop forzato
+};
+
+// --- Mapping Logic ---
+
+document.getElementById('btn-save-map').onclick = async () => {
+    if(confirm("Save current map? This will overwrite existing maps.")) {
+        try {
+            const res = await fetch('/api/map/save', { method: 'POST' });
+            const data = await res.json();
+            alert(data.status);
+        } catch(e) {
+            alert("Error saving map: " + e);
+        }
+    }
+};
+
+// Supporto tastiera (opzionale)
+document.addEventListener('keydown', (e) => {
+    if(e.repeat) return;
+    switch(e.key) {
+        case "ArrowUp": window.startMove('linear', 0.1); break; // 0.1 m/s LIMIT
+        case "ArrowDown": window.startMove('linear', -0.1); break;
+        case "ArrowLeft": window.startMove('angular', 1.0); break;
+        case "ArrowRight": window.startMove('angular', -1.0); break;
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    switch(e.key) {
+        case "ArrowUp": 
+        case "ArrowDown": 
+        case "ArrowLeft": 
+        case "ArrowRight": 
+            window.stopMove(); 
+            break;
+    }
+});
+
+// --- System Mode Logic ---
+
+async function setMode(mode) {
+    if(!confirm(`Switch to ${mode} mode? The robot will restart.`)) return;
+    
+    try {
+        await fetch(`/api/system/mode/${mode}`, { method: 'POST' });
+        alert("System is restarting... page will reload in 15 seconds.");
+        setTimeout(() => location.reload(), 15000);
+    } catch(e) {
+        console.error("Mode switch error", e);
+        alert("Error switching mode");
+    }
+}
+
+// Check mode on load
+async function checkMode() {
+    try {
+        const res = await fetch('/api/system/mode');
+        const data = await res.json();
+        document.getElementById('current-mode-text').innerText = `Current: ${data.mode.toUpperCase()}`;
+        
+        // Evidenzia il bottone attivo
+        if(data.mode === 'mapping') {
+            document.getElementById('btn-mode-map').classList.add('active');
+            document.getElementById('btn-mode-nav').classList.remove('active');
+        } else {
+            document.getElementById('btn-mode-nav').classList.add('active');
+            document.getElementById('btn-mode-map').classList.remove('active');
+        }
+    } catch(e) {}
+}
+
+// Aggiungi checkMode al setInterval o all'avvio
+checkMode();

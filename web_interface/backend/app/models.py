@@ -26,3 +26,7 @@ class RobotStatus(BaseModel):
     battery_level: float
     is_cleaning: bool
     current_state: str
+
+class TeleopRequest(BaseModel):
+    linear_x: float
+    angular_z: float
